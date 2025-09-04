@@ -1,0 +1,19 @@
+[Unit]
+Description=Distiller Update Notifier Timer
+Documentation=https://github.com/pamir-ai/distiller-update
+
+[Timer]
+# Run 5 minutes after boot
+OnBootSec=5min
+
+# Then run every hour
+OnUnitActiveSec=1h
+
+# Randomize start time by up to 10 minutes to avoid thundering herd
+RandomizedDelaySec=10min
+
+# Make the timer persistent (catch up missed runs)
+Persistent=true
+
+[Install]
+WantedBy=timers.target

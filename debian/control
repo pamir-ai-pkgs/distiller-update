@@ -1,0 +1,22 @@
+Source: distiller-update
+Section: admin
+Priority: optional
+Maintainer: PamirAI Incorporated <support@pamir.ai>
+Build-Depends: debhelper-compat (= 13),
+               python3-all (>= 3.11)
+Standards-Version: 4.6.2
+Homepage: https://github.com/pamir-ai/distiller-update
+Rules-Requires-Root: no
+
+Package: distiller-update
+Architecture: all
+Depends: ${misc:Depends},
+         ${python3:Depends},
+         python3 (>= 3.11),
+         python3-packaging,
+         python3-yaml,
+         apt,
+         systemd,
+         coreutils
+Suggests: update-motd
+Description: Update notification system for Distiller by Pamir-AI

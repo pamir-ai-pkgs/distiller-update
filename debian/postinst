@@ -1,0 +1,39 @@
+#!/bin/bash
+# Post-installation script for distiller-update
+
+set -e
+
+case "$1" in
+    configure)
+        # Create directories with proper permissions
+        install -d -m 755 /var/cache/distiller-update
+        install -d -m 755 /var/lib/distiller-update
+        install -d -m 755 /var/log
+        install -d -m 755 /etc/distiller-update
+        
+        # Enable and start the timer
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+            
+            # Enable the timer to run on boot
+            systemctl enable distiller-update.timer || true
+            
+            # Start the timer
+            systemctl start distiller-update.timer || true
+            
+            echo "Distiller Update timer has been enabled and started."
+        fi
+        ;;
+    
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

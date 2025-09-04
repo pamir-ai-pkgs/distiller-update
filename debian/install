@@ -1,0 +1,11 @@
+src/distiller_update/*.py opt/distiller-update/distiller_update/
+src/distiller_update/notifiers/*.py opt/distiller-update/distiller_update/notifiers/
+
+config/config.yaml etc/distiller-update/
+
+debian/distiller-update.service etc/systemd/system/
+debian/distiller-update.timer etc/systemd/system/
+
+pyproject.toml opt/distiller-update/
+
+debian/distiller-update-wrapper usr/bin/

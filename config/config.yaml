@@ -1,0 +1,53 @@
+# Distiller Update Notifier Configuration
+# This is the default configuration file
+
+# Repository configuration
+repository:
+  url: "http://apt.pamir.ai"
+  distributions: 
+    - "stable"
+    - "testing"
+    - "unstable"
+  
+# Update checking
+checking:
+  interval_seconds: 3600  # Check hourly
+  on_startup: true
+  cache_file: "/var/cache/distiller-update/last_check.json"
+
+# Notification settings
+notifications:
+  motd:
+    enabled: true
+    file: "/etc/update-motd.d/99-distiller-updates"
+    show_count: true
+    show_packages: true
+    color: true
+  
+  journal:
+    enabled: true
+    identifier: "distiller-update"
+    priority: "info"  # debug, info, notice, warning, err, crit, alert, emerg
+  
+  status_file:
+    enabled: true
+    path: "/var/lib/distiller-update/status.json"
+    pretty_print: true
+    
+  log_file:
+    enabled: true
+    path: "/var/log/distiller-update.log"
+    max_size_mb: 10
+    backup_count: 3
+    format: "%(asctime)s - %(levelname)s - %(message)s"
+
+# Package filtering
+filters:
+  include_packages: []  # Empty = all packages, or list specific packages
+  exclude_packages: []  # Packages to ignore
+  check_architecture: true
+  priority_levels:
+    - "critical"
+    - "high"
+    - "medium"
+    - "low"

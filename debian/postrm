@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        # Remove the application directory and any runtime-generated files
+        if [ -d /opt/distiller-update ]; then
+            rm -rf /opt/distiller-update
+        fi
+        
+        # Remove cache directory if it exists
+        if [ -d /var/cache/distiller-update ]; then
+            rm -rf /var/cache/distiller-update
+        fi
+        
+        # Remove status directory if it exists  
+        if [ -d /var/lib/distiller-update ]; then
+            rm -rf /var/lib/distiller-update
+        fi
+        
+        # Remove log file if it exists
+        if [ -f /var/log/distiller-update.log ]; then
+            rm -f /var/log/distiller-update.log*
+        fi
+        
+        # Remove MOTD script if it exists
+        if [ -f /etc/update-motd.d/99-distiller-updates ]; then
+            rm -f /etc/update-motd.d/99-distiller-updates
+        fi
+        ;;
+        
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # Nothing to do for these cases
+        ;;
+        
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

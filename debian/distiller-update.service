@@ -1,0 +1,23 @@
+[Unit]
+Description=Distiller Update Notifier Daemon
+Documentation=https://github.com/pamir-ai/distiller-update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/distiller-update daemon
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=distiller-update
+
+# Resource limits
+CPUQuota=10%
+MemoryLimit=50M
+TasksMax=10
+
+[Install]
+WantedBy=multi-user.target

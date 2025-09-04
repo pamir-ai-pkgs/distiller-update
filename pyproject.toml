@@ -1,0 +1,58 @@
+[project]
+name = "distiller-update"
+version = "0.1.0"
+description = "Update notification system for Pamir AI Distiller devices"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "PamirAI Incorporated", email = "support@pamir.ai"}
+]
+keywords = ["apt", "updates", "notifications", "distiller", "raspberry-pi"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: No Input/Output (Daemon)",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "packaging>=23.0",
+]
+
+[project.scripts]
+distiller-update = "distiller_update.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.5.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "mypy>=1.10.0",
+    "types-PyYAML>=6.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/distiller_update"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/config",
+    "/debian",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/ruff.toml",
+    "/build-deb.sh",
+]

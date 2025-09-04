@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_install:
+	dh_install
+	mv debian/distiller-update/usr/bin/distiller-update-wrapper debian/distiller-update/usr/bin/distiller-update
+
+override_dh_installsystemd:
+	# Skip dh_installsystemd since we're installing to /etc/systemd/system manually
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod +x debian/distiller-update/usr/bin/distiller-update
