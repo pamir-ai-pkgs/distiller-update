@@ -1,5 +1,4 @@
-#!/usr/bin/python3
-import sys
-sys.path.insert(0, '/opt/distiller-update')
-from distiller_update.__main__ import main
-sys.exit(main())
+#!/bin/sh
+# Wrapper script for distiller-update that uses the virtual environment
+
+exec /opt/distiller-update/.venv/bin/python -m distiller_update "$@"

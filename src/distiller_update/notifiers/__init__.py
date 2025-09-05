@@ -1,8 +1,6 @@
-"""Notification modules for Distiller Update Notifier"""
+"""Notification handlers for distiller-update."""
 
-from .journal import JournalNotifier
-from .log import LogNotifier
+from .dbus import DBusNotifier
 from .motd import MOTDNotifier
-from .status import StatusNotifier
 
-__all__ = ["JournalNotifier", "LogNotifier", "MOTDNotifier", "StatusNotifier"]
+__all__ = ["DBusNotifier", "MOTDNotifier"]

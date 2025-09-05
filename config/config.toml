@@ -1,0 +1,20 @@
+# Distiller Update Configuration
+# Simple configuration for APT update checking
+
+# Check interval in seconds (minimum 3600 = 1 hour)
+check_interval = 3600
+
+# APT repository settings
+repository_url = "http://apt.pamir.ai"
+distribution = "unstable"  # Options: stable, testing, unstable
+
+# Notification settings
+notify_motd = true   # Show updates in terminal MOTD
+notify_dbus = true   # Send desktop notifications
+
+# File paths
+motd_file = "/etc/update-motd.d/99-distiller-updates"
+cache_dir = "/var/cache/distiller-update"
+
+# Logging
+log_level = "info"  # Options: debug, info, warning, error

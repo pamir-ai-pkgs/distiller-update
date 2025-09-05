@@ -1,146 +1,147 @@
-"""Daemon mode for continuous update checking"""
+"""Async daemon for continuous update checking."""
 
-import logging
+import asyncio
 import signal
-import time
-from datetime import datetime
-from types import FrameType
+from pathlib import Path
 from typing import Any
 
-from .checker import Package, UpdateChecker
-from .config import Config
-from .notifiers import JournalNotifier, LogNotifier, MOTDNotifier, StatusNotifier
+import structlog
 
-logger = logging.getLogger(__name__)
+from .core import UpdateChecker
+from .models import Config
+from .notifiers import DBusNotifier, MOTDNotifier
+
+logger = structlog.get_logger()
 
 
 class UpdateDaemon:
-    """Daemon for continuous update checking"""
+    """Async daemon for periodic update checks."""
 
-    def __init__(self, config_path: str | None = None) -> None:
-        """Initialize daemon"""
-        self.config = Config(config_path)
-        self.checker = UpdateChecker(self.config)
+    def __init__(self, config: Config) -> None:
+        """Initialize daemon."""
+        self.config = config
+        self.checker = UpdateChecker(config)
         self.running = False
-        self.signals_registered = False
+        self.check_task: asyncio.Task[Any] | None = None
 
-        self.motd_notifier = MOTDNotifier(self.config)
-        self.journal_notifier = JournalNotifier(self.config)
-        self.status_notifier = StatusNotifier(self.config)
-        self.log_notifier = LogNotifier(self.config)
+        # Setup notifiers
+        self.checker.add_notifier(MOTDNotifier(config))
+        self.dbus_notifier: DBusNotifier | None = None
+        if config.notify_dbus:
+            self.dbus_notifier = DBusNotifier(config)
+            self.checker.add_notifier(self.dbus_notifier)
 
-    def _handle_signal(self, signum: int, frame: FrameType | None) -> None:
-        """Handle termination signals"""
-        logger.info(f"Received signal {signum}, shutting down...")
-        self.running = False
+    async def start(self) -> None:
+        """Start the daemon."""
+        logger.info(
+            "Starting update daemon",
+            check_interval=self.config.check_interval,
+            distribution=self.config.distribution,
+        )
 
-    def _handle_reload(self, signum: int, frame: FrameType | None) -> None:
-        """Handle reload signal (SIGHUP)"""
-        logger.info("Received SIGHUP, reloading configuration...")
-        self.config = Config()
-        self.checker = UpdateChecker(self.config)
+        # Warn about low check intervals
+        if self.config.check_interval < 3600:
+            logger.warning(
+                f"Check interval of {self.config.check_interval}s is very low. "
+                f"Consider using >= 3600s (1 hour) for production use."
+            )
 
-    def _register_signals(self) -> None:
-        """Register signal handlers once"""
-        if not self.signals_registered:
-            signal.signal(signal.SIGTERM, self._handle_signal)
-            signal.signal(signal.SIGINT, self._handle_signal)
-            signal.signal(signal.SIGHUP, self._handle_reload)
-            self.signals_registered = True
-
-    def run(self) -> None:
-        """Run the daemon"""
-        logger.info("Starting Distiller Update daemon")
-        self._register_signals()
         self.running = True
 
-        # Log to journal that we're starting
-        self.journal_notifier.log_check(checking=False)
+        # Setup signal handlers
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(
+                sig,
+                lambda s=sig: asyncio.create_task(self.stop(s)),  # type: ignore
+            )
 
-        # Check on startup if configured
-        if self.config.checking.on_startup:
-            self._run_check()
+        try:
+            # Run initial check
+            await self.checker.check()
 
-        # Main loop
+            # Start periodic checking
+            async with asyncio.TaskGroup() as tg:
+                self.check_task = tg.create_task(self._check_loop())
+
+        except asyncio.CancelledError:
+            logger.info("Daemon cancelled")
+        except Exception as e:
+            logger.error("Daemon error", error=str(e), exc_info=True)
+            raise
+        finally:
+            await self.cleanup()
+
+    async def _check_loop(self) -> None:
+        """Main checking loop."""
         while self.running:
             try:
-                # Sleep for the configured interval
-                interval = self.config.checking.interval_seconds
-                logger.debug(f"Sleeping for {interval} seconds")
+                # Wait for next check interval
+                await asyncio.sleep(self.config.check_interval)
 
-                # Use short sleeps to be responsive to signals
-                for _ in range(interval):
-                    if not self.running:
-                        break
-                    time.sleep(1)
+                if not self.running:
+                    break
 
-                if self.running:
-                    self._run_check()
+                # Perform check
+                await self.checker.check()
 
+            except asyncio.CancelledError:
+                break
             except Exception as e:
-                logger.error(f"Error in daemon loop: {e}")
+                logger.error("Check failed", error=str(e))
                 # Continue running despite errors
-                time.sleep(60)  # Wait a bit before retrying
 
-        logger.info("Distiller Update daemon stopped")
+    async def stop(self, sig: signal.Signals | None = None) -> None:
+        """Stop the daemon gracefully."""
+        if sig:
+            logger.info("Received signal", signal=sig.name)
 
-    def _run_check(self) -> None:
-        """Run a single update check"""
-        try:
-            start_time = time.time()
+        self.running = False
 
-            logger.info("Running update check")
-            self.log_notifier.log_check_start()
-            self.journal_notifier.log_check(checking=True)
+        if self.check_task and not self.check_task.done():
+            self.check_task.cancel()
+            try:
+                await self.check_task
+            except asyncio.CancelledError:
+                pass
 
-            updates = self.checker.check_updates()
-            summary = self.checker.get_update_summary(updates)
+        logger.info("Daemon stopped")
 
-            cache_data = {
-                "last_check": datetime.now().isoformat(),
-                "updates": len(updates),
-                "summary": summary,
-            }
-            self.config.save_cache(cache_data)
+    async def cleanup(self) -> None:
+        """Cleanup resources."""
+        if self.dbus_notifier:
+            await self.dbus_notifier.close()
 
-            self._send_notifications(updates, summary)
-
-            duration = time.time() - start_time
-            self.log_notifier.log_check_complete(duration)
-            self.journal_notifier.log_check(checking=False)
-
-            logger.info(f"Update check completed in {duration:.2f} seconds")
-
-        except Exception as e:
-            logger.error(f"Update check failed: {e}")
-            self.log_notifier.log_error(f"Update check failed: {e}")
-
-    def _send_notifications(self, updates: list[Package], summary: dict[str, Any]) -> None:
-        """Send all configured notifications"""
-        try:
-            self.motd_notifier.notify(updates, summary)
-        except Exception as e:
-            logger.error(f"MOTD notification failed: {e}")
-
-        try:
-            self.journal_notifier.notify(updates, summary)
-        except Exception as e:
-            logger.error(f"Journal notification failed: {e}")
-
-        try:
-            self.status_notifier.notify(updates, summary)
-        except Exception as e:
-            logger.error(f"Status file notification failed: {e}")
-
-        try:
-            # Write to log file
-            self.log_notifier.notify(updates, summary)
-        except Exception as e:
-            logger.error(f"Log file notification failed: {e}")
-
-    def run_once(self) -> None:
-        """Run a single check and exit"""
+    async def run_once(self) -> None:
+        """Run a single update check."""
         logger.info("Running single update check")
-        self._register_signals()  # Register signals for clean shutdown
-        self._run_check()
-        logger.info("Single update check complete")
+
+        # Setup notifiers
+        self.checker.add_notifier(MOTDNotifier(self.config))
+        if self.config.notify_dbus:
+            dbus_notifier = DBusNotifier(self.config)
+            self.checker.add_notifier(dbus_notifier)
+            try:
+                await self.checker.check()
+            finally:
+                await dbus_notifier.close()
+        else:
+            await self.checker.check()
+
+
+async def run_daemon(config_path: Path | None = None) -> None:
+    """Run the update daemon."""
+    # Load configuration
+    if config_path and config_path.exists():
+        import tomllib
+
+        with open(config_path, "rb") as f:
+            config_data = tomllib.load(f)
+            config = Config(**config_data)
+    else:
+        # Use default config or environment variables
+        config = Config()
+
+    # Create and start daemon
+    daemon = UpdateDaemon(config)
+    await daemon.start()

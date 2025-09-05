@@ -1,3 +1,10 @@
+distiller-update (1.0.0) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * refactor: modernize architecture with async support and improved modularity
+
+ -- PamirAI Incorporated <support@pamir.ai>  Fri, 05 Sep 2025 13:09:16 +0000
+
 distiller-update (0.1.0) unstable; urgency=low
 
   * Initial release

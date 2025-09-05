@@ -1,257 +1,376 @@
-"""CLI interface for Distiller Update Notifier"""
+"""CLI interface for distiller-update using Typer."""
 
-import argparse
-import json
-import logging
+import asyncio
+import os
 import sys
+from pathlib import Path
+from typing import Annotated
+
+import structlog
+import typer
 
 from . import __version__
-from .checker import UpdateChecker
-from .config import Config
+from .core import UpdateChecker
 from .daemon import UpdateDaemon
-from .notifiers import StatusNotifier
+from .models import Config
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+app = typer.Typer(
+    name="distiller-update",
+    help="Simple APT update checker for Pamir AI Distiller devices",
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
 )
-logger = logging.getLogger(__name__)
+
+logger = structlog.get_logger()
 
 
-def cmd_check(args: argparse.Namespace) -> int:
-    """Run update check once"""
-    daemon = UpdateDaemon(args.config)
-    daemon.run_once()
-    return 0
+def load_config(config_path: Path | None = None) -> Config:
+    """Load configuration from file or defaults."""
+    if config_path and config_path.exists():
+        try:
+            import tomllib
+
+            with open(config_path, "rb") as f:
+                data = tomllib.load(f)
+                cfg = Config(**data)
+                logger.info(f"Loaded config from {config_path}")
+                return cfg
+        except ValueError as e:
+            # Pydantic validation error
+            logger.error(f"Config validation failed for {config_path}: {e}")
+            typer.echo(
+                typer.style(
+                    f"Config validation error in {config_path}:\n  {e}",
+                    fg=typer.colors.RED,
+                ),
+                err=True,
+            )
+            raise typer.Exit(1) from None
+        except Exception as e:
+            logger.warning(f"Failed to load config from {config_path}: {e}")
+
+    # Try default locations
+    for path in [
+        Path("/etc/distiller-update/config.toml"),
+        Path.home() / ".config/distiller-update/config.toml",
+    ]:
+        if path.exists():
+            try:
+                import tomllib
+
+                with open(path, "rb") as f:
+                    data = tomllib.load(f)
+                    cfg = Config(**data)
+                    logger.info(f"Loaded config from {path}")
+                    return cfg
+            except ValueError as e:
+                # Pydantic validation error - report it clearly
+                logger.error(f"Config validation failed for {path}: {e}")
+                typer.echo(
+                    typer.style(
+                        f"Config validation error in {path}:\n  {e}",
+                        fg=typer.colors.RED,
+                    ),
+                    err=True,
+                )
+                # Don't try next location on validation errors - fail fast
+                raise typer.Exit(1) from None
+            except Exception as e:
+                # Other errors (TOML syntax, etc.) - log and try next
+                logger.debug(f"Failed to load config from {path}: {e}")
+                continue
+
+    # Use defaults
+    logger.info("Using default configuration")
+    return Config()
 
 
-def cmd_list(args: argparse.Namespace) -> int:
-    """List available updates"""
-    config = Config(args.config)
-    checker = UpdateChecker(config)
+@app.command()
+def check(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Configuration file path"),
+    ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress output"),
+    ] = False,
+) -> None:
+    """Check for updates once and exit."""
 
-    updates = checker.check_updates()
-
-    if not updates:
-        print("No updates available")
-        return 0
-
-    priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    updates.sort(key=lambda p: priority_order.get(p.priority, 99))
-
-    print(f"\n{'Package':<30} {'Installed':<15} {'Available':<15} {'Priority':<10}")
-    print("-" * 70)
-
-    # Print updates
-    for pkg in updates:
-        print(
-            f"{pkg.name:<30} {pkg.installed_version:<15} "
-            f"{pkg.available_version:<15} {pkg.priority:<10}"
+    # Check if running as root
+    if os.geteuid() != 0:
+        typer.echo(
+            typer.style(
+                "Warning: This command requires root privileges for APT operations.",
+                fg=typer.colors.YELLOW,
+            ),
+            err=True,
         )
+        typer.echo(
+            typer.style(
+                "Please run with sudo: sudo distiller-update check", fg=typer.colors.YELLOW
+            ),
+            err=True,
+        )
+        raise typer.Exit(1)
 
-    # Print summary
-    print(f"\nTotal: {len(updates)} update{'s' if len(updates) != 1 else ''} available")
+    async def run() -> None:
+        cfg = load_config(config)
+        daemon = UpdateDaemon(cfg)
+        await daemon.run_once()
 
-    return 0
+        if not quiet:
+            # Get and display results
+            result = await daemon.checker.get_status()
+            if result and result.has_updates:
+                typer.echo(f"\n{result.summary}")
+                if len(result.packages) <= 20:
+                    typer.echo("\nPackages with updates:")
+                    for pkg in result.packages:
+                        typer.echo(f"  • {pkg.name}: {pkg.current_version} → {pkg.new_version}")
+                typer.echo("\nRun 'sudo apt upgrade' to install updates")
+            else:
+                typer.echo("System is up to date")
 
-
-def cmd_status(args: argparse.Namespace) -> int:
-    """Show current status"""
-    config = Config(args.config)
-    status_notifier = StatusNotifier(config)
-
-    # Read status file
-    status = status_notifier.read_status()
-
-    if not status:
-        print("No status available. Run 'distiller-update check' first.")
-        return 1
-
-    if args.json:
-        # Output as JSON
-        print(json.dumps(status, indent=2, default=str))
-    else:
-        # Human-readable output
-        print("\n=== Distiller Update Status ===")
-        print(f"Last check: {status.get('last_check', 'Never')}")
-        print(f"Next check: {status.get('next_check', 'Unknown')}")
-        print(f"Updates available: {'Yes' if status.get('update_available') else 'No'}")
-
-        if status.get("update_available"):
-            print(f"Total updates: {status.get('total_updates', 0)}")
-
-            # Show priority breakdown
-            if "summary" in status and "by_priority" in status["summary"]:
-                priorities = status["summary"]["by_priority"]
-                priority_str = []
-                for level, count in priorities.items():
-                    if count > 0:
-                        priority_str.append(f"{count} {level}")
-                if priority_str:
-                    print(f"By priority: {', '.join(priority_str)}")
-
-            # Show important packages
-            if "updates" in status:
-                important = [
-                    u for u in status["updates"] if u.get("priority") in ["critical", "high"]
-                ]
-                if important:
-                    print("\nImportant updates:")
-                    for pkg in important[:5]:
-                        print(
-                            f"  - {pkg['name']}: {pkg['installed_version']} -> {pkg['available_version']}"
-                        )
-                    if len(important) > 5:
-                        print(f"  ... and {len(important) - 5} more")
-
-        # Show system info if available
-        if "system_info" in status:
-            info = status["system_info"]
-            if info:
-                print(f"\nSystem: {info.get('os', 'Unknown')}")
-                print(f"Architecture: {info.get('architecture', 'Unknown')}")
-                print(f"Hostname: {info.get('hostname', 'Unknown')}")
-
-    return 0
+    asyncio.run(run())
 
 
-def cmd_config(args: argparse.Namespace) -> int:
-    """Show configuration"""
-    config = Config(args.config)
+@app.command()
+def daemon(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Configuration file path"),
+    ] = None,
+) -> None:
+    """Run as a daemon, checking periodically for updates."""
 
-    print("\n=== Distiller Update Configuration ===")
-    print("\nRepository:")
-    print(f"  URL: {config.repository.url}")
-    print(f"  Distributions: {', '.join(config.repository.distributions)}")
+    # Check if running as root
+    if os.geteuid() != 0:
+        typer.echo(
+            typer.style(
+                "Warning: This command requires root privileges for APT operations.",
+                fg=typer.colors.YELLOW,
+            ),
+            err=True,
+        )
+        typer.echo(
+            typer.style(
+                "Please run with sudo: sudo distiller-update daemon", fg=typer.colors.YELLOW
+            ),
+            err=True,
+        )
+        raise typer.Exit(1)
 
-    print("\nChecking:")
-    print(f"  Interval: {config.checking.interval_seconds} seconds")
-    print(f"  On startup: {config.checking.on_startup}")
-    print(f"  Cache file: {config.checking.cache_file}")
-
-    print("\nNotifications:")
-    print(f"  MOTD: {'Enabled' if config.notifications.motd.enabled else 'Disabled'}")
-    print(f"  Journal: {'Enabled' if config.notifications.journal.enabled else 'Disabled'}")
-    print(f"  Status file: {'Enabled' if config.notifications.status_file.enabled else 'Disabled'}")
-    print(f"  Log file: {'Enabled' if config.notifications.log_file.enabled else 'Disabled'}")
-
-    print("\nFilters:")
-    if config.filters.include_packages:
-        print(f"  Include: {', '.join(config.filters.include_packages)}")
-    if config.filters.exclude_packages:
-        print(f"  Exclude: {', '.join(config.filters.exclude_packages)}")
-    print(f"  Check architecture: {config.filters.check_architecture}")
-    print(f"  Priority levels: {', '.join(config.filters.priority_levels)}")
-
-    return 0
-
-
-def cmd_daemon(args: argparse.Namespace) -> int:
-    """Run as daemon"""
-    daemon = UpdateDaemon(args.config)
+    async def run() -> None:
+        cfg = load_config(config)
+        daemon = UpdateDaemon(cfg)
+        await daemon.start()
 
     try:
-        daemon.run()
-        return 0
+        asyncio.run(run())
     except KeyboardInterrupt:
-        logger.info("Received keyboard interrupt")
-        return 0
-    except Exception as e:
-        logger.error(f"Daemon failed: {e}")
-        return 1
+        typer.echo("\nDaemon stopped")
+        sys.exit(0)
 
 
-def main() -> int:
-    """Main CLI entry point"""
-    parser = argparse.ArgumentParser(
-        prog="distiller-update",
-        description="Distiller Update Notifier - Lightweight update notifications for headless systems",
+@app.command()
+def list(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Configuration file path"),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """List currently available updates."""
+
+    async def run() -> None:
+        cfg = load_config(config)
+        checker = UpdateChecker(cfg)
+
+        # Check if we have cached results
+        result = await checker.get_status()
+
+        if not result:
+            typer.echo("No cached update information. Run 'distiller-update check' first.")
+            raise typer.Exit(1)
+
+        if json_output:
+            import json
+
+            typer.echo(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
+        else:
+            if result.has_updates:
+                typer.echo(f"\n{result.summary}")
+                typer.echo(f"Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+                # Display packages in a table format
+                typer.echo(f"{'Package':<30} {'Current':<15} {'Available':<15} {'Type':<10}")
+                typer.echo("-" * 70)
+
+                for pkg in result.packages:
+                    update_type = "Rebuild" if pkg.update_type == "rebuild" else "Version"
+                    typer.echo(
+                        f"{pkg.name:<30} {pkg.current_version:<15} {pkg.new_version:<15} {update_type:<10}"
+                    )
+
+                if result.total_size > 0:
+                    typer.echo(f"\nTotal download size: {result.packages[0].display_size}")
+
+                # Show rebuild notice if any rebuilds are present
+                rebuilds = [p for p in result.packages if p.update_type == "rebuild"]
+                if rebuilds:
+                    typer.echo("\nRebuilds detected: Same version with updated content")
+            else:
+                typer.echo("System is up to date")
+                typer.echo(f"Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    asyncio.run(run())
+
+
+@app.command()
+def version() -> None:
+    """Show version information."""
+    typer.echo(f"distiller-update version {__version__}")
+
+
+@app.command()
+def reinstall_dirty(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Configuration file path"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Show what would be reinstalled without doing it"),
+    ] = False,
+) -> None:
+    """Reinstall packages with checksum mismatches (dirty rebuilds)."""
+
+    # Check if running as root
+    if not dry_run and os.geteuid() != 0:
+        typer.echo(
+            typer.style(
+                "Warning: This command requires root privileges for package installation.",
+                fg=typer.colors.YELLOW,
+            ),
+            err=True,
+        )
+        typer.echo(
+            typer.style(
+                "Please run with sudo: sudo distiller-update reinstall-dirty",
+                fg=typer.colors.YELLOW,
+            ),
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    async def run() -> None:
+        import subprocess
+
+        cfg = load_config(config)
+        checker = UpdateChecker(cfg)
+
+        # Get current status
+        result = await checker.get_status()
+
+        if not result:
+            typer.echo("No cached update information. Run 'distiller-update check' first.")
+            raise typer.Exit(1)
+
+        # Filter for rebuilds only
+        rebuilds = [p for p in result.packages if p.update_type == "rebuild"]
+
+        if not rebuilds:
+            typer.echo("No rebuild packages found. System packages are in sync.")
+            return
+
+        typer.echo(f"\nFound {len(rebuilds)} package(s) with checksum mismatches:")
+        for pkg in rebuilds:
+            typer.echo(f"  • {pkg.name} ({pkg.current_version})")
+            if pkg.installed_checksum and pkg.repository_checksum:
+                typer.echo(f"    Current: {pkg.installed_checksum[:16]}...")
+                typer.echo(f"    Repository: {pkg.repository_checksum[:16]}...")
+
+        if dry_run:
+            typer.echo("\n[DRY RUN] Would reinstall the above packages")
+            typer.echo("Run without --dry-run to actually reinstall")
+            return
+
+        # Confirm before proceeding
+        if not typer.confirm("\nReinstall these packages?"):
+            typer.echo("Cancelled")
+            return
+
+        # Reinstall each package
+        for pkg in rebuilds:
+            typer.echo(f"\nReinstalling {pkg.name}...")
+            try:
+                # Use apt-get install --reinstall
+                result = subprocess.run(
+                    [
+                        "/usr/bin/apt-get",
+                        "install",
+                        "--reinstall",
+                        "-y",
+                        f"{pkg.name}={pkg.current_version}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+
+                if result.returncode == 0:
+                    typer.echo(f"  [OK] Successfully reinstalled {pkg.name}")
+                else:
+                    typer.echo(f"  [FAIL] Failed to reinstall {pkg.name}")
+                    typer.echo(f"    Error: {result.stderr}")
+            except subprocess.TimeoutExpired:
+                typer.echo(f"  [TIMEOUT] Timeout while reinstalling {pkg.name}")
+            except Exception as e:
+                typer.echo(f"  [ERROR] Error reinstalling {pkg.name}: {e}")
+
+        typer.echo("\nReinstallation complete. Run 'distiller-update check' to verify.")
+
+    asyncio.run(run())
+
+
+@app.command()
+def config_show(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Configuration file path"),
+    ] = None,
+) -> None:
+    """Show current configuration."""
+    import json
+
+    cfg = load_config(config)
+    typer.echo(json.dumps(cfg.model_dump(mode="json"), indent=2, default=str))
+
+
+def main() -> None:
+    """Main entry point."""
+    # Setup logging
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.dev.ConsoleRenderer(),
+        ],
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
     )
 
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
-    )
-
-    parser.add_argument(
-        "--config",
-        "-c",
-        help="Configuration file path",
-        default=None,
-    )
-
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Verbose output",
-    )
-
-    # Subcommands
-    subparsers = parser.add_subparsers(
-        dest="command",
-        help="Available commands",
-        required=True,
-    )
-
-    # Check command
-    check_parser = subparsers.add_parser(
-        "check",
-        help="Check for updates once",
-    )
-    check_parser.set_defaults(func=cmd_check)
-
-    # List command
-    list_parser = subparsers.add_parser(
-        "list",
-        help="List available updates",
-    )
-    list_parser.set_defaults(func=cmd_list)
-
-    # Status command
-    status_parser = subparsers.add_parser(
-        "status",
-        help="Show current status",
-    )
-    status_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output as JSON",
-    )
-    status_parser.set_defaults(func=cmd_status)
-
-    # Config command
-    config_parser = subparsers.add_parser(
-        "config",
-        help="Show configuration",
-    )
-    config_parser.set_defaults(func=cmd_config)
-
-    # Daemon command
-    daemon_parser = subparsers.add_parser(
-        "daemon",
-        help="Run as daemon (for systemd)",
-    )
-    daemon_parser.set_defaults(func=cmd_daemon)
-
-    # Parse arguments
-    args = parser.parse_args()
-
-    # Set logging level
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-
-    # Execute command
-    try:
-        return args.func(args)
-    except Exception as e:
-        logger.error(f"Command failed: {e}")
-        if args.verbose:
-            import traceback
-
-            traceback.print_exc()
-        return 1
+    app()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
