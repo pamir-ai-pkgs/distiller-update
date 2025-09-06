@@ -1,3 +1,4 @@
+src/distiller_update/utils/*.py opt/distiller-update/src/distiller_update/utils
 src/distiller_update/*.py opt/distiller-update/src/distiller_update/
 src/distiller_update/notifiers/*.py opt/distiller-update/src/distiller_update/notifiers/
 

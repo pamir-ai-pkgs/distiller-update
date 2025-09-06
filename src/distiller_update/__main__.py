@@ -1,5 +1,3 @@
-"""CLI interface for distiller-update using Typer."""
-
 import asyncio
 import os
 import sys
@@ -12,7 +10,8 @@ import typer
 from . import __version__
 from .core import UpdateChecker
 from .daemon import UpdateDaemon
-from .models import Config
+from .utils.config import load_config
+from .utils.logging import setup_logging
 
 app = typer.Typer(
     name="distiller-update",
@@ -22,67 +21,6 @@ app = typer.Typer(
 )
 
 logger = structlog.get_logger()
-
-
-def load_config(config_path: Path | None = None) -> Config:
-    """Load configuration from file or defaults."""
-    if config_path and config_path.exists():
-        try:
-            import tomllib
-
-            with open(config_path, "rb") as f:
-                data = tomllib.load(f)
-                cfg = Config(**data)
-                logger.info(f"Loaded config from {config_path}")
-                return cfg
-        except ValueError as e:
-            # Pydantic validation error
-            logger.error(f"Config validation failed for {config_path}: {e}")
-            typer.echo(
-                typer.style(
-                    f"Config validation error in {config_path}:\n  {e}",
-                    fg=typer.colors.RED,
-                ),
-                err=True,
-            )
-            raise typer.Exit(1) from None
-        except Exception as e:
-            logger.warning(f"Failed to load config from {config_path}: {e}")
-
-    # Try default locations
-    for path in [
-        Path("/etc/distiller-update/config.toml"),
-        Path.home() / ".config/distiller-update/config.toml",
-    ]:
-        if path.exists():
-            try:
-                import tomllib
-
-                with open(path, "rb") as f:
-                    data = tomllib.load(f)
-                    cfg = Config(**data)
-                    logger.info(f"Loaded config from {path}")
-                    return cfg
-            except ValueError as e:
-                # Pydantic validation error - report it clearly
-                logger.error(f"Config validation failed for {path}: {e}")
-                typer.echo(
-                    typer.style(
-                        f"Config validation error in {path}:\n  {e}",
-                        fg=typer.colors.RED,
-                    ),
-                    err=True,
-                )
-                # Don't try next location on validation errors - fail fast
-                raise typer.Exit(1) from None
-            except Exception as e:
-                # Other errors (TOML syntax, etc.) - log and try next
-                logger.debug(f"Failed to load config from {path}: {e}")
-                continue
-
-    # Use defaults
-    logger.info("Using default configuration")
-    return Config()
 
 
 @app.command()
@@ -96,9 +34,6 @@ def check(
         typer.Option("--quiet", "-q", help="Suppress output"),
     ] = False,
 ) -> None:
-    """Check for updates once and exit."""
-
-    # Check if running as root
     if os.geteuid() != 0:
         typer.echo(
             typer.style(
@@ -121,7 +56,6 @@ def check(
         await daemon.run_once()
 
         if not quiet:
-            # Get and display results
             result = await daemon.checker.get_status()
             if result and result.has_updates:
                 typer.echo(f"\n{result.summary}")
@@ -143,9 +77,6 @@ def daemon(
         typer.Option("--config", "-c", help="Configuration file path"),
     ] = None,
 ) -> None:
-    """Run as a daemon, checking periodically for updates."""
-
-    # Check if running as root
     if os.geteuid() != 0:
         typer.echo(
             typer.style(
@@ -185,13 +116,10 @@ def list(
         typer.Option("--json", help="Output as JSON"),
     ] = False,
 ) -> None:
-    """List currently available updates."""
-
     async def run() -> None:
         cfg = load_config(config)
         checker = UpdateChecker(cfg)
 
-        # Check if we have cached results
         result = await checker.get_status()
 
         if not result:
@@ -207,7 +135,6 @@ def list(
                 typer.echo(f"\n{result.summary}")
                 typer.echo(f"Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-                # Display packages in a table format
                 typer.echo(f"{'Package':<30} {'Current':<15} {'Available':<15} {'Type':<10}")
                 typer.echo("-" * 70)
 
@@ -220,7 +147,6 @@ def list(
                 if result.total_size > 0:
                     typer.echo(f"\nTotal download size: {result.packages[0].display_size}")
 
-                # Show rebuild notice if any rebuilds are present
                 rebuilds = [p for p in result.packages if p.update_type == "rebuild"]
                 if rebuilds:
                     typer.echo("\nRebuilds detected: Same version with updated content")
@@ -233,7 +159,6 @@ def list(
 
 @app.command()
 def version() -> None:
-    """Show version information."""
     typer.echo(f"distiller-update version {__version__}")
 
 
@@ -248,9 +173,6 @@ def reinstall_dirty(
         typer.Option("--dry-run", "-n", help="Show what would be reinstalled without doing it"),
     ] = False,
 ) -> None:
-    """Reinstall packages with checksum mismatches (dirty rebuilds)."""
-
-    # Check if running as root
     if not dry_run and os.geteuid() != 0:
         typer.echo(
             typer.style(
@@ -274,14 +196,12 @@ def reinstall_dirty(
         cfg = load_config(config)
         checker = UpdateChecker(cfg)
 
-        # Get current status
         result = await checker.get_status()
 
         if not result:
             typer.echo("No cached update information. Run 'distiller-update check' first.")
             raise typer.Exit(1)
 
-        # Filter for rebuilds only
         rebuilds = [p for p in result.packages if p.update_type == "rebuild"]
 
         if not rebuilds:
@@ -300,16 +220,13 @@ def reinstall_dirty(
             typer.echo("Run without --dry-run to actually reinstall")
             return
 
-        # Confirm before proceeding
         if not typer.confirm("\nReinstall these packages?"):
             typer.echo("Cancelled")
             return
 
-        # Reinstall each package
         for pkg in rebuilds:
             typer.echo(f"\nReinstalling {pkg.name}...")
             try:
-                # Use apt-get install --reinstall
                 result = subprocess.run(
                     [
                         "/usr/bin/apt-get",
@@ -345,7 +262,6 @@ def config_show(
         typer.Option("--config", "-c", help="Configuration file path"),
     ] = None,
 ) -> None:
-    """Show current configuration."""
     import json
 
     cfg = load_config(config)
@@ -353,22 +269,7 @@ def config_show(
 
 
 def main() -> None:
-    """Main entry point."""
-    # Setup logging
-    structlog.configure(
-        processors=[
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.dev.ConsoleRenderer(),
-        ],
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
-
+    setup_logging()
     app()
 
 
