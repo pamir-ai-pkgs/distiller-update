@@ -115,21 +115,45 @@ def list(
         bool,
         typer.Option("--json", help="Output as JSON"),
     ] = False,
+    refresh: Annotated[
+        bool,
+        typer.Option("--refresh", help="Run apt-get update before listing"),
+    ] = False,
 ) -> None:
     async def run() -> None:
         cfg = load_config(config)
         checker = UpdateChecker(cfg)
 
-        result = await checker.get_status()
+        if refresh:
+            packages = await checker.apt.check_updates(refresh=True)
+            from datetime import datetime
 
-        if not result:
+            from .models import UpdateResult
+            result = UpdateResult(
+                packages=packages,
+                checked_at=datetime.now(),
+                distribution=cfg.distribution,
+            )
+        else:
+            cached_result = await checker.get_status()
+            if cached_result is None:
+                typer.echo("No cached update information. Run 'distiller-update check' first.")
+                raise typer.Exit(1)
+            result = cached_result
+
+        if result is None:
             typer.echo("No cached update information. Run 'distiller-update check' first.")
             raise typer.Exit(1)
 
         if json_output:
             import json
 
-            typer.echo(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
+            typer.echo(json.dumps({
+                "has_updates": result.has_updates,
+                "packages": [p.model_dump() for p in result.packages],
+                "summary": result.summary,
+                "checked_at": result.checked_at.isoformat() + "Z",
+            }, indent=2, default=str))
         else:
             if result.has_updates:
                 typer.echo(f"\n{result.summary}")
@@ -139,9 +163,10 @@ def list(
                 typer.echo("-" * 70)
 
                 for pkg in result.packages:
-                    update_type = "Rebuild" if pkg.update_type == "rebuild" else "Version"
+                    action = "install" if pkg.current_version is None else "upgrade"
+                    current = pkg.current_version or "(new)"
                     typer.echo(
-                        f"{pkg.name:<30} {pkg.current_version:<15} {pkg.new_version:<15} {update_type:<10}"
+                        f"{pkg.name:<30} {current:<15} {pkg.new_version:<15} {action:<10}"
                     )
 
                 if result.total_size > 0:
@@ -227,7 +252,7 @@ def reinstall_dirty(
         for pkg in rebuilds:
             typer.echo(f"\nReinstalling {pkg.name}...")
             try:
-                result = subprocess.run(
+                proc_result = subprocess.run(
                     [
                         "/usr/bin/apt-get",
                         "install",
@@ -240,17 +265,82 @@ def reinstall_dirty(
                     timeout=300,
                 )
 
-                if result.returncode == 0:
+                if proc_result.returncode == 0:
                     typer.echo(f"  [OK] Successfully reinstalled {pkg.name}")
                 else:
                     typer.echo(f"  [FAIL] Failed to reinstall {pkg.name}")
-                    typer.echo(f"    Error: {result.stderr}")
+                    typer.echo(f"    Error: {proc_result.stderr}")
             except subprocess.TimeoutExpired:
                 typer.echo(f"  [TIMEOUT] Timeout while reinstalling {pkg.name}")
             except Exception as e:
                 typer.echo(f"  [ERROR] Error reinstalling {pkg.name}: {e}")
 
         typer.echo("\nReinstallation complete. Run 'distiller-update check' to verify.")
+
+    asyncio.run(run())
+
+
+@app.command()
+def apply(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Configuration file path"),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON"),
+    ] = False,
+    refresh: Annotated[
+        bool,
+        typer.Option("--refresh", help="Run apt-get update before applying"),
+    ] = False,
+) -> None:
+    if os.geteuid() != 0:
+        typer.echo(
+            typer.style(
+                "Warning: This command requires root privileges for package installation.",
+                fg=typer.colors.YELLOW,
+            ),
+            err=True,
+        )
+        typer.echo(
+            typer.style(
+                "Please run with sudo: sudo distiller-update apply", fg=typer.colors.YELLOW
+            ),
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    async def run() -> None:
+        cfg = load_config(config)
+        from .apt import AptInterface
+        apt_interface = AptInterface(cfg)
+
+        # Build the same plan as list
+        actions = await apt_interface.check_updates(refresh=refresh)
+        if not actions:
+            if json_output:
+                import json
+                typer.echo(json.dumps({"ok": True, "message": "Nothing to do"}, indent=2))
+            else:
+                typer.echo("Nothing to do.")
+            return
+
+        result = await apt_interface.apply(actions)
+
+        if json_output:
+            import json
+            typer.echo(json.dumps(result, indent=2, default=str))
+        else:
+            if result.get("ok"):
+                typer.echo("Installation completed successfully")
+                for item in result.get("results", []):
+                    if isinstance(item, dict) and "name" in item:
+                        typer.echo(f"  {item['name']}: {item.get('installed', 'unknown')}")
+            else:
+                typer.echo(f"Installation failed: {result.get('error', 'Unknown error')}")
+
+        raise typer.Exit(0 if result.get("ok") else result.get("rc", 2))
 
     asyncio.run(run())
 
