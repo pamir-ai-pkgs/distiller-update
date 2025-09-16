@@ -1,3 +1,16 @@
+distiller-update (2.0.0) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * refactor: streamline codebase with utility extraction and cleanup
+
+  [ Dev ]
+  * Added an apply flag/feature to allow the users to trigger software updates from the WebUI extension. Needs Review
+
+  [ utsavbalar1231 ]
+  * refactor!: migrate to synchronous architecture
+
+ -- PamirAI Incorporated <support@pamir.ai>  Tue, 16 Sep 2025 20:07:37 +0000
+
 distiller-update (1.0.0) unstable; urgency=medium
 
   [ utsavbalar1231 ]
