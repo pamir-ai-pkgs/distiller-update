@@ -1,6 +1,6 @@
 # Distiller Update
 
-Simple APT update checker for Pamir AI Distiller devices.
+APT update checker for Pamir AI Distiller devices.
 
 ## Features
 

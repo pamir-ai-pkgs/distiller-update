@@ -1,7 +1,5 @@
 import os
 
-import aiofiles
-import aiofiles.os
 import structlog
 
 from ..models import Config, UpdateResult
@@ -15,30 +13,30 @@ class MOTDNotifier:
         self.config = config
         self.motd_file = config.motd_file
 
-    async def notify(self, result: UpdateResult) -> None:
+    def notify(self, result: UpdateResult) -> None:
         if not self.config.notify_motd:
             return
 
         try:
             if not result.has_updates:
-                await self._remove_motd()
+                self._remove_motd()
             else:
-                await self._write_motd(result)
+                self._write_motd(result)
         except Exception as e:
             logger.error("Failed to update MOTD", error=str(e))
 
-    async def _remove_motd(self) -> None:
+    def _remove_motd(self) -> None:
         if self.motd_file.exists():
             try:
-                await aiofiles.os.remove(str(self.motd_file))
+                os.remove(str(self.motd_file))
             except Exception:
                 pass
 
-    async def _write_motd(self, result: UpdateResult) -> None:
+    def _write_motd(self, result: UpdateResult) -> None:
         content = self._generate_motd(result)
         self.motd_file.parent.mkdir(parents=True, exist_ok=True)
-        async with aiofiles.open(self.motd_file, "w") as f:
-            await f.write(content)
+        with open(self.motd_file, "w") as f:
+            f.write(content)
         os.chmod(str(self.motd_file), 0o755)
 
     def _generate_motd(self, result: UpdateResult) -> str:

@@ -1,3 +1,5 @@
+import asyncio
+
 import structlog
 from dbus_fast import BusType, Message, Variant
 from dbus_fast.aio import MessageBus
@@ -15,7 +17,7 @@ class DBusNotifier:
         self.app_icon = "system-software-update"
         self.bus: MessageBus | None = None
 
-    async def notify(self, result: UpdateResult) -> None:
+    def notify(self, result: UpdateResult) -> None:
         if not self.config.notify_dbus:
             return
 
@@ -23,13 +25,21 @@ class DBusNotifier:
             return
 
         try:
-            await self._ensure_connected()
-            title = "System Updates Available"
-            body = self._create_body(result)
-            await self._send_notification(title, body, urgency=1)
+            try:
+                asyncio.get_running_loop()
+                task = asyncio.create_task(self._async_notify(result))
+                task.add_done_callback(lambda t: None)  # Suppress unused variable
+            except RuntimeError:
+                asyncio.run(self._async_notify(result))
+        except Exception as e:
+            logger.warning("DBus notification failed (non-critical)", error=str(e))
 
-        except Exception:
-            pass  # DBus notifications are optional
+    async def _async_notify(self, result: UpdateResult) -> None:
+        """Handle the async DBus notification."""
+        await self._ensure_connected()
+        title = "System Updates Available"
+        body = self._create_body(result)
+        await self._send_notification(title, body, urgency=1)
 
     async def _ensure_connected(self) -> None:
         if self.bus is None:
@@ -83,9 +93,7 @@ class DBusNotifier:
             ],
         )
 
-        reply = await self.bus.call(message)
-        if reply:
-            pass  # Notification ID not needed
+        await self.bus.call(message)
 
     async def close(self) -> None:
         if self.bus:
