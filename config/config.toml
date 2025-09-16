@@ -18,3 +18,12 @@ cache_dir = "/var/cache/distiller-update"
 
 # Logging
 log_level = "info"  # Options: debug, info, warning, error
+
+# Policy settings
+[policy]
+restrict_prefixes = ["pamir-ai-", "distiller-", "claude-code-"]
+allow_new_packages = true
+
+# Bundle settings
+[bundle.default]
+packages = ["claude-code-web-manager", "distiller-base"]

@@ -9,7 +9,7 @@ from .utils.formatting import format_size
 
 class Package(BaseModel):
     name: str
-    current_version: str
+    current_version: str | None
     new_version: str
     size: int = 0
     installed_checksum: str | None = None
@@ -22,7 +22,7 @@ class Package(BaseModel):
 
     @property
     def needs_update(self) -> bool:
-        if self.current_version != self.new_version:
+        if self.current_version is None or self.current_version != self.new_version:
             return True
         if self.installed_checksum and self.repository_checksum:
             return self.installed_checksum != self.repository_checksum
@@ -30,7 +30,9 @@ class Package(BaseModel):
 
     @property
     def update_reason(self) -> str:
-        if self.update_type == "rebuild":
+        if self.current_version is None:
+            return f"New package: {self.new_version}"
+        elif self.update_type == "rebuild":
             return "Rebuild available (checksum changed)"
         else:
             return f"Version update: {self.current_version} → {self.new_version}"
@@ -66,6 +68,9 @@ class Config(BaseModel):
     motd_file: Path = Field(default=Path("/etc/update-motd.d/99-distiller-updates"))
     cache_dir: Path = Field(default=Path("/var/cache/distiller-update"))
     log_level: Literal["debug", "info", "warning", "error"] = "info"
+    policy_restrict_prefixes: list[str] = Field(default_factory=lambda: ["pamir-ai-", "distiller-", "claude-code-"])
+    policy_allow_new_packages: bool = Field(default=True)
+    bundle_default: list[str] = Field(default_factory=list)
 
     def ensure_directories(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)

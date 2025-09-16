@@ -1,4 +1,8 @@
 import asyncio
+import fcntl
+import os
+from datetime import datetime
+from typing import Any
 
 import structlog
 
@@ -12,6 +16,7 @@ class AptInterface:
         self.config = config
 
     async def run_command(self, cmd: list[str], timeout: float = 30.0) -> tuple[str, str, int]:
+        process = None
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -36,7 +41,7 @@ class AptInterface:
             return "", str(e), 1
 
     async def update_cache(self) -> bool:
-        stdout, stderr, code = await self.run_command(["apt-get", "update", "-qq"])
+        _stdout, stderr, code = await self.run_command(["apt-get", "update", "-qq"])
 
         if code != 0:
             logger.warning("Failed to update cache", stderr=stderr)
@@ -44,10 +49,11 @@ class AptInterface:
 
         return True
 
-    async def check_updates(self) -> list[Package]:
-        update_success = await self.update_cache()
-        if not update_success:
-            logger.warning("Cache update failed, checking with existing cache")
+    async def check_updates(self, refresh: bool = True) -> list[Package]:
+        if refresh:
+            update_success = await self.update_cache()
+            if not update_success:
+                logger.warning("Cache update failed, checking with existing cache")
 
         stdout, stderr, code = await self.run_command(["apt", "list", "--upgradable"])
 
@@ -104,8 +110,29 @@ class AptInterface:
                 logger.debug("Failed to parse apt line", line=line, error=str(e))
                 continue
 
-        logger.info(f"Found {len(packages)} upgradable packages")
-        return sorted(packages, key=lambda p: p.name)
+        # Add curated installs (only if allowed)
+        if self.config.policy_allow_new_packages:
+            for name in self.config.bundle_default:
+                cur = await self.installed_version(name)
+                if cur is None:
+                    cand = await self.candidate_version(name)
+                    if cand:
+                        size = await self._get_package_size(name)
+                        packages.append(Package(
+                            name=name,
+                            current_version=None,
+                            new_version=cand,
+                            size=size,
+                        ))
+
+        # De-duplicate and sort
+        dedup: dict[str, Package] = {}
+        for p in packages:
+            dedup[p.name] = p
+        packages = sorted(dedup.values(), key=lambda p: (p.current_version is None, p.name))
+
+        logger.info(f"Found {len(packages)} actions")
+        return packages
 
     async def _get_package_size(self, name: str) -> int:
         try:
@@ -117,3 +144,79 @@ class AptInterface:
         except Exception:
             pass
         return 0
+
+    async def installed_version(self, name: str) -> str | None:
+        stdout, _, code = await self.run_command(["dpkg-query", "-W", "-f=${Version}", name], timeout=5.0)
+        if code == 0 and stdout.strip():
+            return stdout.strip()
+        return None
+
+    async def candidate_version(self, name: str) -> str | None:
+        stdout, _, code = await self.run_command(["apt-cache", "policy", name], timeout=5.0)
+        if code != 0:
+            return None
+        for line in stdout.splitlines():
+            line = line.strip()
+            if line.startswith("Candidate:"):
+                cand = line.split(":", 1)[1].strip()
+                return None if cand in ("(none)", "none") else cand
+        return None
+
+    async def apply(self, actions: list[Package], install_timeout: float = 1800.0) -> dict[str, Any]:
+        lock_path = "/run/distiller-update.lock"
+        os.makedirs("/run", exist_ok=True)
+
+        try:
+            with open(lock_path, "w") as lockf:
+                try:
+                    fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return {"ok": False, "rc": 1, "error": "Another update is running"}
+
+                started_at = datetime.now()
+
+                # Refresh cache before apply
+                await self.update_cache()
+
+                to_upgrade = [a for a in actions if a.current_version]
+                to_install = [a for a in actions if a.current_version is None]
+
+                up_args = [f"{p.name}={p.new_version}" for p in to_upgrade]
+                in_args = [f"{p.name}={p.new_version}" for p in to_install]
+
+                rc = 0
+                if up_args:
+                    _, _, code = await self.run_command(
+                        ["apt-get", "install", "-y", "--only-upgrade", *up_args],
+                        timeout=install_timeout,
+                    )
+                    rc = max(rc, code)
+
+                if in_args:
+                    _, _, code = await self.run_command(
+                        ["apt-get", "install", "-y", *in_args],
+                        timeout=install_timeout,
+                    )
+                    rc = max(rc, code)
+
+                # Verify installations
+                ok = True
+                results = []
+                for p in actions:
+                    cur = await self.installed_version(p.name)
+                    results.append({"name": p.name, "installed": cur, "expected": p.new_version})
+                    if cur != p.new_version:
+                        ok = False
+                        rc = rc or 2
+
+                finished_at = datetime.now()
+                return {
+                    "ok": ok,
+                    "rc": rc,
+                    "started_at": started_at.isoformat() + "Z",
+                    "finished_at": finished_at.isoformat() + "Z",
+                    "results": results
+                }
+        except Exception as e:
+            logger.error("Apply failed", error=str(e))
+            return {"ok": False, "rc": 3, "error": str(e)}
