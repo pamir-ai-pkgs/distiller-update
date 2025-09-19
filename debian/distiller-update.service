@@ -16,7 +16,7 @@ SyslogIdentifier=distiller-update
 
 # Resource limits
 CPUQuota=10%
-MemoryLimit=50M
+MemoryMax=50M
 TasksMax=10
 
 [Install]

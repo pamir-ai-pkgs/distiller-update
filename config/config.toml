@@ -1,5 +1,4 @@
 # Distiller Update Configuration
-# Simple configuration for APT update checking
 
 # Check interval in seconds (minimum 3600 = 1 hour)
 check_interval = 3600
@@ -19,6 +18,12 @@ cache_dir = "/var/cache/distiller-update"
 # Logging
 log_level = "info"  # Options: debug, info, warning, error
 
+# APT command timeouts (in seconds)
+apt_update_timeout = 120    # Timeout for apt-get update
+apt_list_timeout = 60       # Timeout for apt list --upgradable
+apt_query_timeout = 10      # Timeout for quick apt queries
+apt_install_timeout = 1800  # Timeout for package installation
+
 # Policy settings
 [policy]
 restrict_prefixes = ["pamir-ai-", "distiller-", "claude-code-"]
@@ -26,4 +31,4 @@ allow_new_packages = true
 
 # Bundle settings
 [bundle.default]
-packages = ["claude-code-web-manager", "distiller-base"]
+packages = ["claude-code-web-manager", "distiller-cm5-sdk", "distiller-cm5-services", "distiller-cc", "distiller-update"]

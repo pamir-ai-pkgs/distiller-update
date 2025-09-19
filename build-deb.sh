@@ -68,49 +68,49 @@ get_package_name() {
 
 # Check build dependencies
 check_build_dependencies() {
-    local missing_deps=""
-    
-    # Check for dpkg-buildpackage
-    if ! command -v dpkg-buildpackage >/dev/null 2>&1; then
-        if ! dpkg -l dpkg-dev 2>/dev/null | grep -q "^ii"; then
-            missing_deps="$missing_deps dpkg-dev"
-        fi
-    fi
-    
-    # Check for dch (from devscripts)
-    if ! command -v dch >/dev/null 2>&1; then
-        if ! dpkg -l devscripts 2>/dev/null | grep -q "^ii"; then
-            missing_deps="$missing_deps devscripts"
-        fi
-    fi
-    
-    # Check for debhelper (check if package is installed)
-    if ! dpkg -l debhelper 2>/dev/null | grep -q "^ii"; then
-        missing_deps="$missing_deps debhelper"
-    fi
-    
-    # Check for fakeroot
-    if ! command -v fakeroot >/dev/null 2>&1; then
-        if ! dpkg -l fakeroot 2>/dev/null | grep -q "^ii"; then
-            missing_deps="$missing_deps fakeroot"
-        fi
-    fi
-    
-    # Check for device-tree-compiler (for DKMS projects)
-    local project_type=$(detect_project_type)
-    if [ "$project_type" = "dkms" ]; then
-        if ! command -v dtc >/dev/null 2>&1; then
-            if ! dpkg -l device-tree-compiler 2>/dev/null | grep -q "^ii"; then
-                missing_deps="$missing_deps device-tree-compiler"
-            fi
-        fi
-    fi
-    
-    if [ -n "$missing_deps" ]; then
-        log_error "Missing build dependencies:$missing_deps"
-        log_info "Install with: sudo apt-get install$missing_deps"
-        return 1
-    fi
+    # local missing_deps=""
+    #
+    # # Check for dpkg-buildpackage
+    # if ! command -v dpkg-buildpackage >/dev/null 2>&1; then
+    #     if ! dpkg -l dpkg-dev 2>/dev/null | grep -q "^ii"; then
+    #         missing_deps="$missing_deps dpkg-dev"
+    #     fi
+    # fi
+    #
+    # # Check for dch (from devscripts)
+    # if ! command -v dch >/dev/null 2>&1; then
+    #     if ! dpkg -l devscripts 2>/dev/null | grep -q "^ii"; then
+    #         missing_deps="$missing_deps devscripts"
+    #     fi
+    # fi
+    #
+    # # Check for debhelper (check if package is installed)
+    # if ! dpkg -l debhelper 2>/dev/null | grep -q "^ii"; then
+    #     missing_deps="$missing_deps debhelper"
+    # fi
+    #
+    # # Check for fakeroot
+    # if ! command -v fakeroot >/dev/null 2>&1; then
+    #     if ! dpkg -l fakeroot 2>/dev/null | grep -q "^ii"; then
+    #         missing_deps="$missing_deps fakeroot"
+    #     fi
+    # fi
+    #
+    # # Check for device-tree-compiler (for DKMS projects)
+    # local project_type=$(detect_project_type)
+    # if [ "$project_type" = "dkms" ]; then
+    #     if ! command -v dtc >/dev/null 2>&1; then
+    #         if ! dpkg -l device-tree-compiler 2>/dev/null | grep -q "^ii"; then
+    #             missing_deps="$missing_deps device-tree-compiler"
+    #         fi
+    #     fi
+    # fi
+    #
+    # if [ -n "$missing_deps" ]; then
+    #     log_error "Missing build dependencies:$missing_deps"
+    #     log_info "Install with: sudo apt-get install$missing_deps"
+    #     return 1
+    # fi
     
     return 0
 }

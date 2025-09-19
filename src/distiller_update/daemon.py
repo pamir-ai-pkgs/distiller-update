@@ -5,12 +5,21 @@ from typing import Any
 
 import structlog
 
-from .core import UpdateChecker
+from .checker import UpdateChecker
 from .models import Config
 from .notifiers import DBusNotifier, MOTDNotifier
 from .utils.config import load_config
 
 logger = structlog.get_logger()
+
+
+def _get_directory_mtime(path: Path) -> float:
+    """Get the modification time of a directory, handling errors gracefully."""
+    try:
+        return path.stat().st_mtime if path.exists() else 0.0
+    except (OSError, PermissionError) as e:
+        logger.warning(f"Cannot access directory {path} for mtime check", error=str(e))
+        return 0.0
 
 
 class UpdateDaemon:
@@ -19,6 +28,8 @@ class UpdateDaemon:
         self.checker = UpdateChecker(config)
         self.running = False
         self.check_task: asyncio.Task[Any] | None = None
+        self.last_apt_cache_mtime: float = 0.0
+
         self.checker.add_notifier(MOTDNotifier(config))
         self.dbus_notifier: DBusNotifier | None = None
         if config.notify_dbus:
@@ -32,6 +43,8 @@ class UpdateDaemon:
                 f"Consider using >= 3600s (1 hour) for production use."
             )
 
+        self._update_apt_cache_mtime()
+
         self.running = True
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -41,12 +54,13 @@ class UpdateDaemon:
             )
 
         try:
-            await self.checker.check()
-            async with asyncio.TaskGroup() as tg:
-                self.check_task = tg.create_task(self._check_loop())
+            self.checker.check()
+            self.check_task = asyncio.create_task(self._check_loop())
+            await self.check_task  # Wait for the check loop to complete
 
         except asyncio.CancelledError:
-            pass
+            logger.debug("Daemon start cancelled")
+            raise
         except Exception as e:
             logger.error("Daemon error", error=str(e), exc_info=True)
             raise
@@ -56,16 +70,25 @@ class UpdateDaemon:
     async def _check_loop(self) -> None:
         while self.running:
             try:
+                if self._has_apt_cache_changed():
+                    logger.info("APT cache changed, checking for updates")
+                    self.checker.check()
+                    self._update_apt_cache_mtime()
+
                 await asyncio.sleep(self.config.check_interval)
 
                 if not self.running:
                     break
-                await self.checker.check()
+
+                self.checker.check()
 
             except asyncio.CancelledError:
+                logger.debug("Check loop cancelled")
                 break
             except Exception as e:
-                logger.error("Check failed", error=str(e))
+                logger.error(
+                    "Check failed, will retry on next interval", error=str(e), exc_info=True
+                )
 
     async def stop(self, sig: signal.Signals | None = None) -> None:
         if sig:
@@ -78,23 +101,36 @@ class UpdateDaemon:
             try:
                 await self.check_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Check task cancelled successfully")
 
     async def cleanup(self) -> None:
         if self.dbus_notifier:
             await self.dbus_notifier.close()
 
-    async def run_once(self) -> None:
-        self.checker.add_notifier(MOTDNotifier(self.config))
-        if self.config.notify_dbus:
-            dbus_notifier = DBusNotifier(self.config)
-            self.checker.add_notifier(dbus_notifier)
-            try:
-                await self.checker.check()
-            finally:
-                await dbus_notifier.close()
+    def _has_apt_cache_changed(self) -> bool:
+        """Check if APT cache directory has been modified since last check."""
+        current_mtime = _get_directory_mtime(self.config.apt_lists_path)
+        return current_mtime > self.last_apt_cache_mtime
+
+    def _update_apt_cache_mtime(self) -> None:
+        """Update the stored modification time of APT cache directory."""
+        self.last_apt_cache_mtime = _get_directory_mtime(self.config.apt_lists_path)
+
+    def run_once(self) -> None:
+        # Only add notifiers if checker has none
+        if not self.checker.notifiers:
+            self.checker.add_notifier(MOTDNotifier(self.config))
+            if self.config.notify_dbus:
+                dbus_notifier = DBusNotifier(self.config)
+                self.checker.add_notifier(dbus_notifier)
+                try:
+                    self.checker.check()
+                finally:
+                    asyncio.run(dbus_notifier.close())
+            else:
+                self.checker.check()
         else:
-            await self.checker.check()
+            self.checker.check()
 
 
 async def run_daemon(config_path: Path | None = None) -> None:

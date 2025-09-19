@@ -12,30 +12,10 @@ class Package(BaseModel):
     current_version: str | None
     new_version: str
     size: int = 0
-    installed_checksum: str | None = None
-    repository_checksum: str | None = None
-    update_type: Literal["version", "rebuild"] = "version"
 
     @property
     def display_size(self) -> str:
         return format_size(self.size)
-
-    @property
-    def needs_update(self) -> bool:
-        if self.current_version is None or self.current_version != self.new_version:
-            return True
-        if self.installed_checksum and self.repository_checksum:
-            return self.installed_checksum != self.repository_checksum
-        return False
-
-    @property
-    def update_reason(self) -> str:
-        if self.current_version is None:
-            return f"New package: {self.new_version}"
-        elif self.update_type == "rebuild":
-            return "Rebuild available (checksum changed)"
-        else:
-            return f"Version update: {self.current_version} → {self.new_version}"
 
 
 class UpdateResult(BaseModel):
@@ -68,9 +48,22 @@ class Config(BaseModel):
     motd_file: Path = Field(default=Path("/etc/update-motd.d/99-distiller-updates"))
     cache_dir: Path = Field(default=Path("/var/cache/distiller-update"))
     log_level: Literal["debug", "info", "warning", "error"] = "info"
-    policy_restrict_prefixes: list[str] = Field(default_factory=lambda: ["pamir-ai-", "distiller-", "claude-code-"])
+    policy_restrict_prefixes: list[str] = Field(
+        default_factory=lambda: ["pamir-ai-", "distiller-", "claude-code-"]
+    )
     policy_allow_new_packages: bool = Field(default=True)
     bundle_default: list[str] = Field(default_factory=list)
+    apt_lists_path: Path = Field(default=Path("/var/lib/apt/lists"))
+
+    # APT command timeout settings (in seconds)
+    apt_update_timeout: int = Field(default=120, ge=30, description="Timeout for apt-get update")
+    apt_list_timeout: int = Field(
+        default=60, ge=10, description="Timeout for apt list --upgradable"
+    )
+    apt_query_timeout: int = Field(default=10, ge=5, description="Timeout for quick apt queries")
+    apt_install_timeout: int = Field(
+        default=1800, ge=300, description="Timeout for package installation"
+    )
 
     def ensure_directories(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)

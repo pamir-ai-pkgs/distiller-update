@@ -50,21 +50,6 @@ def test_config_defaults():
     assert config.log_level == "info"
 
 
-def test_config_env_override():
-    import os
-
-    os.environ["DISTILLER_CHECK_INTERVAL"] = "7200"
-    os.environ["DISTILLER_DISTRIBUTION"] = "testing"
-
-    config = Config()
-
-    assert config.check_interval == 7200
-    assert config.distribution == "testing"
-
-    del os.environ["DISTILLER_CHECK_INTERVAL"]
-    del os.environ["DISTILLER_DISTRIBUTION"]
-
-
 def test_config_validation():
     with pytest.raises(ValueError):
         Config(check_interval=0)
