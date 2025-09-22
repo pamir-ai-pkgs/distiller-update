@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
@@ -14,6 +15,14 @@ from .daemon import UpdateDaemon
 from .models import Config, UpdateResult
 from .utils.config import load_config
 from .utils.logging import setup_logging
+from .utils.ui import (
+    console,
+    format_package_table,
+    format_time,
+    get_spinner,
+    print_summary,
+    show_step,
+)
 
 app = typer.Typer(name="distiller-update", no_args_is_help=True)
 
@@ -34,25 +43,42 @@ def get_config(config_path: Path | None) -> Config:
 def check(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     quiet: Annotated[bool, typer.Option("--quiet", "-q")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
     """Check for updates."""
     ensure_root()
 
     cfg = get_config(config)
     daemon = UpdateDaemon(cfg)
-    daemon.run_once()
+
+    if not quiet:
+        start_time = time.time()
+        with get_spinner("Checking for updates..."):
+            daemon.run_once()
+        elapsed = time.time() - start_time
+        show_step(f"Update check completed ({format_time(elapsed)})", success=True)
+    else:
+        daemon.run_once()
 
     if not quiet:
         result = daemon.checker.get_status()
         if result and result.has_updates:
-            typer.echo(f"\n{result.summary}")
+            print_summary(result.summary)
+
             if len(result.packages) <= 20:
-                typer.echo("\nPackages with updates:")
-                for pkg in result.packages:
-                    typer.echo(f"  • {pkg.name}: {pkg.current_version} → {pkg.new_version}")
-            typer.echo("\nRun 'sudo apt upgrade' to install updates")
+                # Show table for reasonable number of packages
+                table = format_package_table(result.packages)
+                console.print(table)
+            else:
+                # For many packages, show count only
+                console.print(f"[yellow]Found {len(result.packages)} packages with updates[/yellow]")
+                console.print("Run 'distiller-update list' to see all packages")
+
+            console.print("\n[bold cyan]Run 'sudo distiller-update apply' to install updates[/bold cyan]")
         else:
-            typer.echo("System is up to date")
+            show_step("System is up to date", success=True)
+            if result:
+                console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]")
 
 
 @app.command()
@@ -84,16 +110,19 @@ def list(
     checker = UpdateChecker(cfg)
 
     if refresh:
-        packages = checker.check_updates(refresh=True)
-        result = UpdateResult(
-            packages=packages,
-            checked_at=datetime.now(),
-            distribution=cfg.distribution,
-        )
+        with get_spinner("Refreshing package information..."):
+            packages = checker.check_updates(refresh=True)
+            result = UpdateResult(
+                packages=packages,
+                checked_at=datetime.now(),
+                distribution=cfg.distribution,
+            )
+        show_step("Package information refreshed", success=True)
     else:
         cached_result = checker.get_status()
         if not cached_result:
-            typer.echo("No cached update information. Run 'distiller-update check' first.")
+            console.print("[red]No cached update information.[/red]")
+            console.print("Run 'distiller-update check' first.")
             raise typer.Exit(1)
         result = cached_result
 
@@ -112,22 +141,18 @@ def list(
         )
     else:
         if result.has_updates:
-            typer.echo(f"\n{result.summary}")
-            typer.echo(f"Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            print_summary(result.summary)
+            console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n")
 
-            typer.echo(f"{'Package':<30} {'Current':<15} {'Available':<15} {'Type':<10}")
-            typer.echo("-" * 70)
-
-            for pkg in result.packages:
-                action = "install" if pkg.current_version is None else "upgrade"
-                current = pkg.current_version or "(new)"
-                typer.echo(f"{pkg.name:<30} {current:<15} {pkg.new_version:<15} {action:<10}")
+            # Use rich table for better formatting
+            table = format_package_table(result.packages, show_size=True)
+            console.print(table)
 
             if result.total_size > 0:
-                typer.echo(f"\nTotal download size: {result.packages[0].display_size}")
+                console.print(f"\n[cyan]Total download size: {result.packages[0].display_size}[/cyan]")
         else:
-            typer.echo("System is up to date")
-            typer.echo(f"Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            show_step("System is up to date", success=True)
+            console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]")
 
 
 @app.command()
@@ -142,26 +167,41 @@ def apply(
     cfg = get_config(config)
     checker = UpdateChecker(cfg)
 
-    actions = checker.check_updates(refresh=refresh)
+    if not json_output:
+        with get_spinner("Checking for available updates..."):
+            actions = checker.check_updates(refresh=refresh)
+    else:
+        actions = checker.check_updates(refresh=refresh)
+
     if not actions:
         if json_output:
             typer.echo(json.dumps({"ok": True, "message": "Nothing to do"}, indent=2))
         else:
-            typer.echo("Nothing to do.")
+            show_step("No updates to install", success=True)
         return
 
-    result = checker.apply(actions)
+    if not json_output:
+        console.print(f"\n[bold cyan]Installing {len(actions)} package{'s' if len(actions) != 1 else ''}...[/bold cyan]")
+        for pkg in actions:
+            console.print(f"  → {pkg.name}: {pkg.current_version or '(new)'} → {pkg.new_version}")
+        console.print()
+
+        # Show progress during installation
+        with get_spinner("Installing packages (this may take a while)..."):
+            result = checker.apply(actions)
+    else:
+        result = checker.apply(actions)
 
     if json_output:
         typer.echo(json.dumps(result, indent=2, default=str))
     else:
         if result.get("ok"):
-            typer.echo("Installation completed successfully")
+            show_step("Installation completed successfully", success=True)
             for item in result.get("results", []):
                 if isinstance(item, dict) and "name" in item:
-                    typer.echo(f"  {item['name']}: {item.get('installed', 'unknown')}")
+                    console.print(f"  [green]✓[/green] {item['name']}: {item.get('installed', 'unknown')}")
         else:
-            typer.echo(f"Installation failed: {result.get('error', 'Unknown error')}")
+            show_step(f"Installation failed: {result.get('error', 'Unknown error')}", error=True)
 
     raise typer.Exit(0 if result.get("ok") else result.get("rc", 2))
 

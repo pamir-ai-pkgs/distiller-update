@@ -270,8 +270,9 @@ class UpdateChecker:
 
     def _update_cache(self) -> bool:
         """Update the APT cache."""
+        # Remove -qq to show some progress to the user
         _stdout, stderr, code = self._run_command(
-            ["apt-get", "update", "-qq"], timeout=self.config.apt_update_timeout
+            ["apt-get", "update"], timeout=self.config.apt_update_timeout
         )
 
         if code != 0:

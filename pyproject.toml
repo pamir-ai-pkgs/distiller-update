@@ -25,6 +25,7 @@ dependencies = [
     "dbus-fast>=2.24.0",
     "typer>=0.15.0",
     "structlog>=25.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.scripts]
