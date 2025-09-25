@@ -1,3 +1,11 @@
+distiller-update (2.1.1) unstable; urgency=medium
+
+  * fix: ensure `distiller-update list --json --refresh` emits pure JSON
+  * feat: document CLI flags and promote verbose logging linkage
+  * chore: align Debian packaging with version 2.1.1
+
+ -- PamirAI Incorporated <support@pamir.ai>  Wed, 24 Sep 2025 19:30:58 -0400
+
 distiller-update (2.1.0) unstable; urgency=medium
 
   [ utsavbalar1231 ]

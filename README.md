@@ -24,14 +24,21 @@ sudo dpkg -i dist/distiller-update_*.deb
 ## Usage
 
 ```bash
-# Check for updates once
-distiller-update check
+# Check for updates once (add --quiet or --verbose as needed)
+sudo distiller-update check
+sudo distiller-update check --quiet
+sudo distiller-update check --verbose
 
 # Run as daemon
-distiller-update daemon
+sudo distiller-update daemon
 
-# List available updates
+# List available updates (cache or fresh lookup)
 distiller-update list
+distiller-update list --json
+distiller-update list --json --refresh
+
+# Apply updates
+sudo distiller-update apply
 
 # Show configuration
 distiller-update config-show

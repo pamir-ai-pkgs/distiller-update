@@ -15,6 +15,7 @@ from .daemon import UpdateDaemon
 from .models import Config, UpdateResult
 from .utils.config import load_config
 from .utils.logging import setup_logging
+from .utils.formatting import format_size
 from .utils.ui import (
     console,
     format_package_table,
@@ -41,14 +42,25 @@ def get_config(config_path: Path | None) -> Config:
 
 @app.command()
 def check(
-    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
-    quiet: Annotated[bool, typer.Option("--quiet", "-q")] = False,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to a configuration file"),
+    ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress progress indicators and summaries"),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose debug logging"),
+    ] = False,
 ) -> None:
     """Check for updates."""
     ensure_root()
 
     cfg = get_config(config)
+    if verbose:
+        cfg.log_level = "debug"
     daemon = UpdateDaemon(cfg)
 
     if not quiet:
@@ -82,7 +94,12 @@ def check(
 
 
 @app.command()
-def daemon(config: Annotated[Path | None, typer.Option("--config", "-c")] = None) -> None:
+def daemon(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to a configuration file"),
+    ] = None,
+) -> None:
     """Run as daemon."""
     ensure_root()
 
@@ -100,9 +117,18 @@ def daemon(config: Annotated[Path | None, typer.Option("--config", "-c")] = None
 
 @app.command()
 def list(
-    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
-    json_output: Annotated[bool, typer.Option("--json")] = False,
-    refresh: Annotated[bool, typer.Option("--refresh")] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to a configuration file"),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit update information as JSON"),
+    ] = False,
+    refresh: Annotated[
+        bool,
+        typer.Option("--refresh", help="Refresh cached APT metadata before listing"),
+    ] = False,
 ) -> None:
     """List available updates."""
 
@@ -110,14 +136,22 @@ def list(
     checker = UpdateChecker(cfg)
 
     if refresh:
-        with get_spinner("Refreshing package information..."):
+        if json_output:
             packages = checker.check_updates(refresh=True)
             result = UpdateResult(
                 packages=packages,
                 checked_at=datetime.now(),
                 distribution=cfg.distribution,
             )
-        show_step("Package information refreshed", success=True)
+        else:
+            with get_spinner("Refreshing package information..."):
+                packages = checker.check_updates(refresh=True)
+                result = UpdateResult(
+                    packages=packages,
+                    checked_at=datetime.now(),
+                    distribution=cfg.distribution,
+                )
+            show_step("Package information refreshed", success=True)
     else:
         cached_result = checker.get_status()
         if not cached_result:
@@ -139,27 +173,39 @@ def list(
                 default=str,
             )
         )
+        return
+
+    if result.has_updates:
+        print_summary(result.summary)
+        console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n")
+
+        # Use rich table for better formatting
+        table = format_package_table(result.packages, show_size=True)
+        console.print(table)
+
+        if result.total_size > 0:
+            console.print(
+                f"\n[cyan]Total download size: {format_size(result.total_size)}[/cyan]"
+            )
     else:
-        if result.has_updates:
-            print_summary(result.summary)
-            console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n")
-
-            # Use rich table for better formatting
-            table = format_package_table(result.packages, show_size=True)
-            console.print(table)
-
-            if result.total_size > 0:
-                console.print(f"\n[cyan]Total download size: {result.packages[0].display_size}[/cyan]")
-        else:
-            show_step("System is up to date", success=True)
-            console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]")
+        show_step("System is up to date", success=True)
+        console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]")
 
 
 @app.command()
 def apply(
-    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
-    json_output: Annotated[bool, typer.Option("--json")] = False,
-    refresh: Annotated[bool, typer.Option("--refresh")] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Path to a configuration file"),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit action results as JSON"),
+    ] = False,
+    refresh: Annotated[
+        bool,
+        typer.Option("--refresh", help="Refresh cached APT metadata before applying"),
+    ] = False,
 ) -> None:
     """Apply updates."""
     ensure_root()
