@@ -1,10 +1,19 @@
+distiller-update (2.2.0) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * refactor(debian): simplify packaging scripts and improve reliability
+  * fix: detect missing Pamir AI repository
+  * chore: Replace Unicode characters with ASCII
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Sat, 27 Sep 2025 00:45:30 +0530
+
 distiller-update (2.1.1) unstable; urgency=medium
 
   * fix: ensure `distiller-update list --json --refresh` emits pure JSON
   * feat: document CLI flags and promote verbose logging linkage
   * chore: align Debian packaging with version 2.1.1
 
- -- PamirAI Incorporated <support@pamir.ai>  Wed, 24 Sep 2025 19:30:58 -0400
+ -- PamirAI Incorporated <founders@pamir.ai>  Sat, 27 Sep 2025 00:45:15 +0530
 
 distiller-update (2.1.0) unstable; urgency=medium
 
