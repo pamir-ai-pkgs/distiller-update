@@ -59,7 +59,7 @@ class MOTDNotifier:
             for pkg in result.packages:
                 size_str = f" ({pkg.display_size})" if pkg.size > 0 else ""
                 lines.append(
-                    f'echo "  • {pkg.name}: {pkg.current_version} → {pkg.new_version}{size_str}"'
+                    f'echo "  - {pkg.name}: {pkg.current_version} -> {pkg.new_version}{size_str}"'
                 )
         else:
             total_size = result.total_size

@@ -73,7 +73,7 @@ def check(
         else:
             daemon.run_once()
     except RepositoryNotConfiguredError as e:
-        console.print("[red]✗ Repository configuration error[/red]")
+        console.print("[red]ERROR: Repository configuration error[/red]")
         console.print(f"[yellow]{e!s}[/yellow]")
         console.print("\n[cyan]To add the Pamir AI repository:[/cyan]")
         console.print("  1. Add the repository to /etc/apt/sources.list.d/")
@@ -156,7 +156,7 @@ def list(
         if json_output:
             typer.echo(json.dumps({"error": str(e)}, indent=2))
         else:
-            console.print("[red]✗ Repository configuration error[/red]")
+            console.print("[red]ERROR: Repository configuration error[/red]")
             console.print(f"[yellow]{e!s}[/yellow]")
             console.print(
                 "\n[cyan]Please configure the Pamir AI repository before checking for updates.[/cyan]"
@@ -246,7 +246,7 @@ def apply(
         if json_output:
             typer.echo(json.dumps({"ok": False, "error": str(e)}, indent=2))
         else:
-            console.print("[red]✗ Repository configuration error[/red]")
+            console.print("[red]ERROR: Repository configuration error[/red]")
             console.print(f"[yellow]{e!s}[/yellow]")
             console.print(
                 "\n[cyan]Please configure the Pamir AI repository before applying updates.[/cyan]"
@@ -271,7 +271,7 @@ def apply(
             f"\n[bold cyan]Installing {len(actions)} package{'s' if len(actions) != 1 else ''}...[/bold cyan]"
         )
         for pkg in actions:
-            console.print(f"  → {pkg.name}: {pkg.current_version or '(new)'} → {pkg.new_version}")
+            console.print(f"  -> {pkg.name}: {pkg.current_version or '(new)'} -> {pkg.new_version}")
         console.print()
 
         # Show progress during installation
@@ -288,7 +288,7 @@ def apply(
             for item in result.get("results", []):
                 if isinstance(item, dict) and "name" in item:
                     console.print(
-                        f"  [green]✓[/green] {item['name']}: {item.get('installed', 'unknown')}"
+                        f"  [green][OK][/green] {item['name']}: {item.get('installed', 'unknown')}"
                     )
         else:
             show_step(f"Installation failed: {result.get('error', 'Unknown error')}", error=True)

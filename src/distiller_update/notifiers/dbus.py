@@ -58,7 +58,7 @@ class DBusNotifier:
             lines.append("")
             lines.append("Packages:")
             for pkg in result.packages[:5]:
-                lines.append(f"• {pkg.name} ({pkg.new_version})")
+                lines.append(f"- {pkg.name} ({pkg.new_version})")
 
         if result.total_size > 0:
             lines.append("")

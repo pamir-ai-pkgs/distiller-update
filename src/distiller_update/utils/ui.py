@@ -18,11 +18,11 @@ def get_spinner(text: str, style: str = "cyan") -> Any:  # noqa: ANN401
 def show_step(message: str, success: bool = False, error: bool = False) -> None:
     """Show a step with appropriate indicator."""
     if success:
-        console.print(f"[green]✓[/green] {message}")
+        console.print(f"[green][OK][/green] {message}")
     elif error:
-        console.print(f"[red]✗[/red] {message}")
+        console.print(f"[red][ERROR][/red] {message}")
     else:
-        console.print(f"[blue]→[/blue] {message}")
+        console.print(f"[blue]>[/blue] {message}")
 
 
 def format_package_table(packages: list[Any], show_size: bool = True) -> Table:

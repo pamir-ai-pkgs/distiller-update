@@ -41,7 +41,7 @@ def test_list_json_refresh_outputs_clean_json(tmp_path, monkeypatch):
     assert result.exit_code == 0
     output = result.stdout.strip()
     assert output.startswith("{")
-    assert "✓" not in output
+    assert "[OK]" not in output
 
     payload = json.loads(output)
     assert payload["has_updates"] is True
