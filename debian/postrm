@@ -2,30 +2,29 @@
 set -e
 
 case "$1" in
-    purge)
-        # Remove the virtual environment
-        if [ -d /opt/distiller-update/.venv ]; then
-            rm -rf /opt/distiller-update/.venv
-        fi
-        
-        # Remove cache directory
-        if [ -d /var/cache/distiller-update ]; then
-            rm -rf /var/cache/distiller-update
-        fi
-        
-        # Remove configuration directory if empty
-        if [ -d /etc/distiller-update ]; then
-            rmdir --ignore-fail-on-non-empty /etc/distiller-update || true
-        fi
-        ;;
-        
-    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
-        ;;
+purge)
+	# Remove the virtual environment
+	if [ -d /opt/distiller-update/.venv ]; then
+		rm -rf /opt/distiller-update/.venv
+	fi
 
-    *)
-        echo "postrm called with unknown argument \`$1'" >&2
-        exit 1
-        ;;
+	# Remove cache directory
+	if [ -d /var/cache/distiller-update ]; then
+		rm -rf /var/cache/distiller-update
+	fi
+
+	# Remove configuration directory if empty
+	if [ -d /etc/distiller-update ]; then
+		rmdir --ignore-fail-on-non-empty /etc/distiller-update || true
+	fi
+	;;
+
+remove | upgrade | failed-upgrade | abort-install | abort-upgrade | disappear) ;;
+
+*)
+	echo "ERROR: postrm called with unknown argument \`$1'" >&2
+	exit 1
+	;;
 esac
 
 #DEBHELPER#

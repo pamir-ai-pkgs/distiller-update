@@ -4,32 +4,31 @@
 set -e
 
 case "$1" in
-    remove|upgrade|deconfigure)
-        # Stop and disable the timer
-        if [ -d /run/systemd/system ]; then
-            # Stop the timer
-            systemctl stop distiller-update.timer || true
-            
-            # Stop the service if it's running
-            systemctl stop distiller-update.service || true
-            
-            # Disable the timer
-            systemctl disable distiller-update.timer || true
-        fi
-        
-        # Clean up MOTD file if it exists
-        if [ -f /etc/update-motd.d/99-distiller-updates ]; then
-            rm -f /etc/update-motd.d/99-distiller-updates
-        fi
-        ;;
-    
-    failed-upgrade)
-        ;;
-    
-    *)
-        echo "prerm called with unknown argument '$1'" >&2
-        exit 1
-        ;;
+remove | upgrade | deconfigure)
+	# Stop and disable the timer
+	if [ -d /run/systemd/system ]; then
+		# Stop the timer
+		systemctl stop distiller-update.timer || true
+
+		# Stop the service if it's running
+		systemctl stop distiller-update.service || true
+
+		# Disable the timer
+		systemctl disable distiller-update.timer || true
+	fi
+
+	# Clean up MOTD file if it exists
+	if [ -f /etc/update-motd.d/99-distiller-updates ]; then
+		rm -f /etc/update-motd.d/99-distiller-updates
+	fi
+	;;
+
+failed-upgrade) ;;
+
+*)
+	echo "ERROR: prerm called with unknown argument '$1'" >&2
+	exit 1
+	;;
 esac
 
 #DEBHELPER#
