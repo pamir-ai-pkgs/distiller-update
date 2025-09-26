@@ -20,9 +20,7 @@ def test_list_json_refresh_outputs_clean_json(tmp_path, monkeypatch):
     )
     config.ensure_directories()
 
-    packages = [
-        Package(name="pkg1", current_version="1.0", new_version="1.1", size=1024)
-    ]
+    packages = [Package(name="pkg1", current_version="1.0", new_version="1.1", size=1024)]
 
     class DummyChecker:
         def __init__(self, cfg: Config) -> None:

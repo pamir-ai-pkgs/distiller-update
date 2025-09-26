@@ -10,12 +10,12 @@ from typing import Annotated
 import typer
 
 from . import __version__
-from .checker import UpdateChecker
+from .checker import RepositoryNotConfiguredError, UpdateChecker
 from .daemon import UpdateDaemon
 from .models import Config, UpdateResult
 from .utils.config import load_config
-from .utils.logging import setup_logging
 from .utils.formatting import format_size
+from .utils.logging import setup_logging
 from .utils.ui import (
     console,
     format_package_table,
@@ -61,16 +61,26 @@ def check(
     cfg = get_config(config)
     if verbose:
         cfg.log_level = "debug"
-    daemon = UpdateDaemon(cfg)
 
-    if not quiet:
-        start_time = time.time()
-        with get_spinner("Checking for updates..."):
+    try:
+        daemon = UpdateDaemon(cfg)
+        if not quiet:
+            start_time = time.time()
+            with get_spinner("Checking for updates..."):
+                daemon.run_once()
+            elapsed = time.time() - start_time
+            show_step(f"Update check completed ({format_time(elapsed)})", success=True)
+        else:
             daemon.run_once()
-        elapsed = time.time() - start_time
-        show_step(f"Update check completed ({format_time(elapsed)})", success=True)
-    else:
-        daemon.run_once()
+    except RepositoryNotConfiguredError as e:
+        console.print("[red]✗ Repository configuration error[/red]")
+        console.print(f"[yellow]{e!s}[/yellow]")
+        console.print("\n[cyan]To add the Pamir AI repository:[/cyan]")
+        console.print("  1. Add the repository to /etc/apt/sources.list.d/")
+        console.print("  2. Add the GPG key if required")
+        console.print("  3. Run 'sudo apt-get update'")
+        console.print("\n[dim]For more information, visit: https://apt.pamir.ai[/dim]")
+        raise typer.Exit(1) from None
 
     if not quiet:
         result = daemon.checker.get_status()
@@ -83,14 +93,20 @@ def check(
                 console.print(table)
             else:
                 # For many packages, show count only
-                console.print(f"[yellow]Found {len(result.packages)} packages with updates[/yellow]")
+                console.print(
+                    f"[yellow]Found {len(result.packages)} packages with updates[/yellow]"
+                )
                 console.print("Run 'distiller-update list' to see all packages")
 
-            console.print("\n[bold cyan]Run 'sudo distiller-update apply' to install updates[/bold cyan]")
+            console.print(
+                "\n[bold cyan]Run 'sudo distiller-update apply' to install updates[/bold cyan]"
+            )
         else:
             show_step("System is up to date", success=True)
             if result:
-                console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]")
+                console.print(
+                    f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]"
+                )
 
 
 @app.command()
@@ -133,7 +149,19 @@ def list(
     """List available updates."""
 
     cfg = get_config(config)
-    checker = UpdateChecker(cfg)
+
+    try:
+        checker = UpdateChecker(cfg)
+    except RepositoryNotConfiguredError as e:
+        if json_output:
+            typer.echo(json.dumps({"error": str(e)}, indent=2))
+        else:
+            console.print("[red]✗ Repository configuration error[/red]")
+            console.print(f"[yellow]{e!s}[/yellow]")
+            console.print(
+                "\n[cyan]Please configure the Pamir AI repository before checking for updates.[/cyan]"
+            )
+        raise typer.Exit(1) from None
 
     if refresh:
         if json_output:
@@ -177,16 +205,16 @@ def list(
 
     if result.has_updates:
         print_summary(result.summary)
-        console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n")
+        console.print(
+            f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n"
+        )
 
         # Use rich table for better formatting
         table = format_package_table(result.packages, show_size=True)
         console.print(table)
 
         if result.total_size > 0:
-            console.print(
-                f"\n[cyan]Total download size: {format_size(result.total_size)}[/cyan]"
-            )
+            console.print(f"\n[cyan]Total download size: {format_size(result.total_size)}[/cyan]")
     else:
         show_step("System is up to date", success=True)
         console.print(f"[dim]Last checked: {result.checked_at.strftime('%Y-%m-%d %H:%M:%S')}[/dim]")
@@ -211,7 +239,19 @@ def apply(
     ensure_root()
 
     cfg = get_config(config)
-    checker = UpdateChecker(cfg)
+
+    try:
+        checker = UpdateChecker(cfg)
+    except RepositoryNotConfiguredError as e:
+        if json_output:
+            typer.echo(json.dumps({"ok": False, "error": str(e)}, indent=2))
+        else:
+            console.print("[red]✗ Repository configuration error[/red]")
+            console.print(f"[yellow]{e!s}[/yellow]")
+            console.print(
+                "\n[cyan]Please configure the Pamir AI repository before applying updates.[/cyan]"
+            )
+        raise typer.Exit(1) from None
 
     if not json_output:
         with get_spinner("Checking for available updates..."):
@@ -227,7 +267,9 @@ def apply(
         return
 
     if not json_output:
-        console.print(f"\n[bold cyan]Installing {len(actions)} package{'s' if len(actions) != 1 else ''}...[/bold cyan]")
+        console.print(
+            f"\n[bold cyan]Installing {len(actions)} package{'s' if len(actions) != 1 else ''}...[/bold cyan]"
+        )
         for pkg in actions:
             console.print(f"  → {pkg.name}: {pkg.current_version or '(new)'} → {pkg.new_version}")
         console.print()
@@ -245,7 +287,9 @@ def apply(
             show_step("Installation completed successfully", success=True)
             for item in result.get("results", []):
                 if isinstance(item, dict) and "name" in item:
-                    console.print(f"  [green]✓[/green] {item['name']}: {item.get('installed', 'unknown')}")
+                    console.print(
+                        f"  [green]✓[/green] {item['name']}: {item.get('installed', 'unknown')}"
+                    )
         else:
             show_step(f"Installation failed: {result.get('error', 'Unknown error')}", error=True)
 

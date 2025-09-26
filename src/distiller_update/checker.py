@@ -17,6 +17,12 @@ logger = structlog.get_logger()
 VALID_PACKAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9+\-.]+$")
 
 
+class RepositoryNotConfiguredError(Exception):
+    """Raised when the Pamir AI repository is not configured in APT sources."""
+
+    pass
+
+
 class Notifier(Protocol):
     """Protocol for notification objects."""
 
@@ -39,8 +45,16 @@ class UpdateChecker:
     def __init__(self, config: Config) -> None:
         self.config = config
         self.notifiers: list[Notifier] = []
+        self._repository_validated = False
         config.ensure_directories()
         setup_logging(config.log_level)
+
+        # Validate repository on initialization
+        if not self._validate_repository():
+            raise RepositoryNotConfiguredError(
+                f"Pamir AI repository ({self.config.repository_url}) not configured in APT sources. "
+                "Please add the repository to your APT sources list."
+            )
 
     def add_notifier(self, notifier: Notifier) -> None:
         """Add a notifier to receive update notifications."""
@@ -61,6 +75,9 @@ class UpdateChecker:
 
             return result
 
+        except RepositoryNotConfiguredError:
+            # Re-raise repository configuration errors for proper handling
+            raise
         except Exception as e:
             logger.error("Update check failed", error=str(e), exc_info=True)
             raise
@@ -267,6 +284,31 @@ class UpdateChecker:
         except Exception as e:
             logger.error("Command failed", cmd=cmd, error=str(e))
             return "", str(e), 1
+
+    def _validate_repository(self) -> bool:
+        """Validate that the Pamir AI repository is configured in APT sources."""
+        stdout, stderr, code = self._run_command(
+            ["apt-cache", "policy"], timeout=self.config.apt_query_timeout
+        )
+
+        if code != 0:
+            logger.error("Failed to check APT policy", stderr=stderr)
+            return False
+
+        # Extract repository URL without protocol for matching
+        repo_host = self.config.repository_url.replace("http://", "").replace("https://", "")
+
+        # Check if the repository is in the apt-cache policy output
+        if repo_host not in stdout:
+            logger.error(
+                "Pamir AI repository not found in APT sources",
+                repository=self.config.repository_url,
+                searched_for=repo_host,
+            )
+            return False
+
+        logger.debug(f"Repository {repo_host} found in APT sources")
+        return True
 
     def _update_cache(self) -> bool:
         """Update the APT cache."""

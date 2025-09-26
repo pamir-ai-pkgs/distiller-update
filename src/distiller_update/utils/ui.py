@@ -42,7 +42,7 @@ def format_package_table(packages: list[Any], show_size: bool = True) -> Table:
             pkg.new_version,
         ]
         if show_size:
-            row.append(pkg.display_size if hasattr(pkg, 'display_size') else str(pkg.size))
+            row.append(pkg.display_size if hasattr(pkg, "display_size") else str(pkg.size))
         table.add_row(*row)
 
     return table
