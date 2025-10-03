@@ -31,4 +31,4 @@ allow_new_packages = true
 
 # Bundle settings
 [bundle.default]
-packages = ["claude-code-web-manager", "distiller-cm5-sdk", "distiller-cm5-services", "distiller-cc", "distiller-update"]
+packages = ["claude-code-web-manager", "distiller-sdk", "distiller-services", "distiller-cc", "distiller-update", "distiller-telemetry", "pamir-ai-eink-dkms", "pamir-ai-sam-dkms", "pamir-ai-soundcard-dkms"]
