@@ -1,4 +1,3 @@
 #!/bin/sh
-# Wrapper script for distiller-update that uses the virtual environment
 
 exec /opt/distiller-update/.venv/bin/python -m distiller_update "$@"
