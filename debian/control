@@ -5,7 +5,7 @@ Maintainer: PamirAI Incorporated <support@pamir.ai>
 Build-Depends: debhelper-compat (= 13),
                python3-all (>= 3.11)
 Standards-Version: 4.6.2
-Homepage: https://github.com/pamir-ai/distiller-update
+Homepage: https://github.com/pamir-ai-pkgs/distiller-update
 Rules-Requires-Root: no
 
 Package: distiller-update
