@@ -37,7 +37,7 @@ log_error() {
 # Detect project type
 detect_project_type() {
     local project_type="unknown"
-    
+
     # Check for Python project with uv
     if [ -f "pyproject.toml" ] && grep -q "uv" "pyproject.toml" 2>/dev/null; then
         project_type="python-uv"
@@ -53,7 +53,7 @@ detect_project_type() {
     elif [ -d "systemd" ] || ls *.service 2>/dev/null | grep -q service; then
         project_type="systemd"
     fi
-    
+
     echo "$project_type"
 }
 
@@ -68,59 +68,33 @@ get_package_name() {
 
 # Check build dependencies
 check_build_dependencies() {
-    # local missing_deps=""
-    #
-    # # Check for dpkg-buildpackage
-    # if ! command -v dpkg-buildpackage >/dev/null 2>&1; then
-    #     if ! dpkg -l dpkg-dev 2>/dev/null | grep -q "^ii"; then
-    #         missing_deps="$missing_deps dpkg-dev"
-    #     fi
-    # fi
-    #
-    # # Check for dch (from devscripts)
-    # if ! command -v dch >/dev/null 2>&1; then
-    #     if ! dpkg -l devscripts 2>/dev/null | grep -q "^ii"; then
-    #         missing_deps="$missing_deps devscripts"
-    #     fi
-    # fi
-    #
-    # # Check for debhelper (check if package is installed)
-    # if ! dpkg -l debhelper 2>/dev/null | grep -q "^ii"; then
-    #     missing_deps="$missing_deps debhelper"
-    # fi
-    #
-    # # Check for fakeroot
-    # if ! command -v fakeroot >/dev/null 2>&1; then
-    #     if ! dpkg -l fakeroot 2>/dev/null | grep -q "^ii"; then
-    #         missing_deps="$missing_deps fakeroot"
-    #     fi
-    # fi
-    #
-    # # Check for device-tree-compiler (for DKMS projects)
-    # local project_type=$(detect_project_type)
-    # if [ "$project_type" = "dkms" ]; then
-    #     if ! command -v dtc >/dev/null 2>&1; then
-    #         if ! dpkg -l device-tree-compiler 2>/dev/null | grep -q "^ii"; then
-    #             missing_deps="$missing_deps device-tree-compiler"
-    #         fi
-    #     fi
-    # fi
-    #
-    # if [ -n "$missing_deps" ]; then
-    #     log_error "Missing build dependencies:$missing_deps"
-    #     log_info "Install with: sudo apt-get install$missing_deps"
-    #     return 1
-    # fi
-    
+    local missing_tools=""
+
+    # Check for required commands (works with both package and manual install)
+    for cmd in dpkg-buildpackage dch dh fakeroot; do
+        if ! command -v $cmd >/dev/null 2>&1; then
+            missing_tools="$missing_tools $cmd"
+        fi
+    done
+
+    if [ -n "$missing_tools" ]; then
+        log_error "Missing build tools:$missing_tools"
+        log_info "Install with: sudo apt-get install dpkg-dev devscripts debhelper fakeroot"
+        return 1
+    fi
+
+    # Note: dpkg-buildpackage checks Build-Depends from debian/control
+    # We use -d flag to ignore dependency checks when cross-compiling or using manual tools
+
     return 0
 }
 
 # Clean build artifacts
 clean_build() {
     local package_name=$(get_package_name)
-    
+
     log_info "Cleaning build artifacts..."
-    
+
     # Clean debian build files
     [ -f "${DEBIAN_DIR}/files" ] && rm -f "${DEBIAN_DIR}/files"
     [ -f "${DEBIAN_DIR}/*.debhelper.log" ] && rm -f "${DEBIAN_DIR}"/*.debhelper.log
@@ -128,17 +102,17 @@ clean_build() {
     [ -d "${DEBIAN_DIR}/.debhelper" ] && rm -rf "${DEBIAN_DIR}/.debhelper"
     [ -d "${DEBIAN_DIR}/${package_name}" ] && rm -rf "${DEBIAN_DIR}/${package_name}"
     [ -f "${DEBIAN_DIR}/debhelper-build-stamp" ] && rm -f "${DEBIAN_DIR}/debhelper-build-stamp"
-    
+
     # Clean distribution directory
     rm -rf "${DIST_DIR}"
-    
+
     # Clean package files in parent directory
     rm -f ../"${package_name}"_*.deb
     rm -f ../"${package_name}"_*.dsc
     rm -f ../"${package_name}"_*.tar.*
     rm -f ../"${package_name}"_*.changes
     rm -f ../"${package_name}"_*.buildinfo
-    
+
     # Project-specific cleaning
     local project_type=$(detect_project_type)
     case "$project_type" in
@@ -155,39 +129,39 @@ clean_build() {
             make clean 2>/dev/null || true
             ;;
     esac
-    
+
     log_success "Clean completed"
 }
 
 # Prepare Python project with uv
 prepare_python_uv() {
     log_info "Preparing Python project with uv..."
-    
+
     # Check for uv.lock - we don't include it in packages
     if [ -f "uv.lock" ]; then
         log_warning "Found uv.lock - this file will not be included in the package"
         log_info "uv.lock will be generated on the target system during installation"
     fi
-    
+
     # Check for required files
     if [ ! -f "pyproject.toml" ]; then
         log_error "Missing pyproject.toml file"
         return 1
     fi
-    
+
     return 0
 }
 
 # Prepare Node.js project
 prepare_nodejs() {
     log_info "Preparing Node.js project..."
-    
+
     # Check for package.json
     if [ ! -f "package.json" ]; then
         log_error "Missing package.json file"
         return 1
     fi
-    
+
     # Install production dependencies
     if [ -d "node_modules" ]; then
         log_info "Using existing node_modules directory"
@@ -195,20 +169,20 @@ prepare_nodejs() {
         log_info "Installing production dependencies..."
         npm ci --omit=dev --omit=optional || npm install --production
     fi
-    
+
     return 0
 }
 
 # Prepare DKMS project
 prepare_dkms() {
     log_info "Preparing DKMS project..."
-    
+
     # Check for dkms.conf
     if [ ! -f "dkms.conf" ]; then
         log_error "Missing dkms.conf file"
         return 1
     fi
-    
+
     # Compile device tree overlays if present
     for dts in *.dts; do
         if [ -f "$dts" ]; then
@@ -217,7 +191,7 @@ prepare_dkms() {
             dtc -@ -I dts -O dtb -o "$dtbo" "$dts" || log_warning "Failed to compile $dts"
         fi
     done
-    
+
     return 0
 }
 
@@ -225,16 +199,16 @@ prepare_dkms() {
 build_package() {
     local package_name=$(get_package_name)
     local project_type=$(detect_project_type)
-    
+
     if [ -z "$package_name" ]; then
         log_error "Could not determine package name from debian/control"
         return 1
     fi
-    
+
     log_info "Building package: $package_name"
     log_info "Project type: $project_type"
     log_info "Target architecture: $TARGET_ARCHITECTURE"
-    
+
     # Prepare project based on type
     case "$project_type" in
         python-uv)
@@ -247,7 +221,7 @@ build_package() {
             prepare_dkms || return 1
             ;;
     esac
-    
+
     # Update changelog if needed
     if [ -f "${DEBIAN_DIR}/changelog" ]; then
         log_info "Changelog exists, skipping update"
@@ -255,43 +229,49 @@ build_package() {
         log_info "Creating initial changelog..."
         dch --create --package "$package_name" --newversion "1.0.0" --distribution stable "Initial release"
     fi
-    
+
     # Build the package
     log_info "Building Debian package..."
-    
+
+    # Enable parallel builds
+    export DEB_BUILD_OPTIONS="${DEB_BUILD_OPTIONS:-} parallel=$(nproc)"
+
     # Check if we're cross-compiling
     local current_arch=$(dpkg --print-architecture)
     local build_flags="-us -uc -b"
-    
+
+    # Always use -d flag to ignore Build-Depends checks
+    # (needed for manual tool installs and cross-compilation)
+    build_flags="$build_flags -d"
+
     if [ "$current_arch" != "$TARGET_ARCHITECTURE" ]; then
         log_warning "Cross-compiling from $current_arch to $TARGET_ARCHITECTURE"
         log_info "Note: For production packages, building on target architecture is recommended"
-        
-        # For cross-compilation, we need to use -d flag to override dependency checks
-        # since build dependencies might be architecture-specific
-        build_flags="$build_flags -d --host-arch=$TARGET_ARCHITECTURE"
+
+        # Add architecture flag for cross-compilation
+        build_flags="$build_flags -a$TARGET_ARCHITECTURE"
     fi
-    
+
     # Use dpkg-buildpackage with appropriate flags
     # -us -uc: Don't sign the package
     # -b: Binary-only build
-    # -d: Override dependency checks (for cross-compilation)
-    # --host-arch: Specify target architecture (for cross-compilation)
+    # -d: Override dependency checks (for cross-compilation and manual tool installs)
+    # -a: Specify target architecture (for cross-compilation)
     if dpkg-buildpackage $build_flags; then
         log_success "Package built successfully"
     else
         log_error "Package build failed"
         return 1
     fi
-    
+
     # Create distribution directory and move packages
     mkdir -p "${DIST_DIR}"
-    
+
     # Move built packages to dist directory
     if ls ../"${package_name}"_*.deb 2>/dev/null; then
         mv ../"${package_name}"_*.deb "${DIST_DIR}/"
         log_success "Package moved to ${DIST_DIR}/"
-        
+
         # Display package information
         for deb in "${DIST_DIR}"/*.deb; do
             if [ -f "$deb" ]; then
@@ -304,13 +284,13 @@ build_package() {
         log_error "No .deb package found after build"
         return 1
     fi
-    
+
     # Clean up other build artifacts
     rm -f ../"${package_name}"_*.dsc
     rm -f ../"${package_name}"_*.tar.*
     rm -f ../"${package_name}"_*.changes
     rm -f ../"${package_name}"_*.buildinfo
-    
+
     return 0
 }
 
@@ -326,7 +306,7 @@ OPTIONS:
     check       Check build dependencies and exit
     help        Show this help message
     native      Build for current architecture instead of arm64
-    
+
 Without options, builds the Debian package for arm64.
 
 ENVIRONMENT VARIABLES:
@@ -378,24 +358,24 @@ main() {
             exit 1
             ;;
     esac
-    
+
     # Check if we're in a valid project directory
     if [ ! -d "$DEBIAN_DIR" ]; then
         log_error "No debian/ directory found. This script must be run from a project root."
         exit 1
     fi
-    
+
     # Check build dependencies
     if ! check_build_dependencies; then
         exit 1
     fi
-    
+
     # Detect project type
     local project_type=$(detect_project_type)
     if [ "$project_type" = "unknown" ]; then
         log_warning "Could not detect project type, proceeding with generic build"
     fi
-    
+
     # Build the package
     if build_package; then
         log_success "Build completed successfully!"
