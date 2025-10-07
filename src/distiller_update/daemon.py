@@ -56,8 +56,9 @@ class UpdateDaemon:
             )
 
         try:
-            await asyncio.to_thread(self.checker.check)
+            # Fetch news first to ensure MOTD notifier has latest news when notified
             await asyncio.to_thread(self.news_fetcher.fetch)
+            await asyncio.to_thread(self.checker.check)
             self.check_task = asyncio.create_task(self._check_loop())
             await self.check_task  # Wait for the check loop to complete
 
@@ -75,8 +76,9 @@ class UpdateDaemon:
             try:
                 if self._has_apt_cache_changed():
                     logger.info("APT cache changed, checking for updates")
-                    await asyncio.to_thread(self.checker.check)
+                    # Fetch news first to ensure MOTD notifier has latest news
                     await asyncio.to_thread(self.news_fetcher.fetch)
+                    await asyncio.to_thread(self.checker.check)
                     self._update_apt_cache_mtime()
 
                 await asyncio.sleep(self.config.check_interval)
@@ -84,8 +86,9 @@ class UpdateDaemon:
                 if not self.running:
                     break
 
-                await asyncio.to_thread(self.checker.check)
+                # Fetch news first to ensure MOTD notifier has latest news
                 await asyncio.to_thread(self.news_fetcher.fetch)
+                await asyncio.to_thread(self.checker.check)
 
             except asyncio.CancelledError:
                 logger.debug("Check loop cancelled")
@@ -122,6 +125,9 @@ class UpdateDaemon:
         self.last_apt_cache_mtime = _get_directory_mtime(self.config.apt_lists_path)
 
     def run_once(self) -> None:
+        # Fetch news first to ensure MOTD notifier has latest news when notified
+        self.news_fetcher.fetch()
+
         # Only add notifiers if checker has none
         if not self.checker.notifiers:
             self.checker.add_notifier(MOTDNotifier(self.config))
@@ -130,15 +136,12 @@ class UpdateDaemon:
                 self.checker.add_notifier(dbus_notifier)
                 try:
                     self.checker.check()
-                    self.news_fetcher.fetch()
                 finally:
                     asyncio.run(dbus_notifier.close())
             else:
                 self.checker.check()
-                self.news_fetcher.fetch()
         else:
             self.checker.check()
-            self.news_fetcher.fetch()
 
 
 async def run_daemon(config_path: Path | None = None) -> None:
