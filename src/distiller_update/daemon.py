@@ -7,6 +7,7 @@ import structlog
 
 from .checker import UpdateChecker
 from .models import Config
+from .news import NewsFetcher
 from .notifiers import DBusNotifier, MOTDNotifier
 from .utils.config import load_config
 
@@ -26,6 +27,7 @@ class UpdateDaemon:
     def __init__(self, config: Config) -> None:
         self.config = config
         self.checker = UpdateChecker(config)
+        self.news_fetcher = NewsFetcher(config)
         self.running = False
         self.check_task: asyncio.Task[Any] | None = None
         self.last_apt_cache_mtime: float = 0.0
@@ -55,6 +57,7 @@ class UpdateDaemon:
 
         try:
             self.checker.check()
+            self.news_fetcher.fetch()
             self.check_task = asyncio.create_task(self._check_loop())
             await self.check_task  # Wait for the check loop to complete
 
@@ -73,6 +76,7 @@ class UpdateDaemon:
                 if self._has_apt_cache_changed():
                     logger.info("APT cache changed, checking for updates")
                     self.checker.check()
+                    self.news_fetcher.fetch()
                     self._update_apt_cache_mtime()
 
                 await asyncio.sleep(self.config.check_interval)
@@ -81,6 +85,7 @@ class UpdateDaemon:
                     break
 
                 self.checker.check()
+                self.news_fetcher.fetch()
 
             except asyncio.CancelledError:
                 logger.debug("Check loop cancelled")
@@ -125,12 +130,15 @@ class UpdateDaemon:
                 self.checker.add_notifier(dbus_notifier)
                 try:
                     self.checker.check()
+                    self.news_fetcher.fetch()
                 finally:
                     asyncio.run(dbus_notifier.close())
             else:
                 self.checker.check()
+                self.news_fetcher.fetch()
         else:
             self.checker.check()
+            self.news_fetcher.fetch()
 
 
 async def run_daemon(config_path: Path | None = None) -> None:
