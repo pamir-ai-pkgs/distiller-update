@@ -39,6 +39,23 @@ class UpdateResult(BaseModel):
         return f"{count} package{'s' if count != 1 else ''} can be upgraded"
 
 
+class NewsResult(BaseModel):
+    content: str
+    fetched_at: datetime = Field(default_factory=datetime.now)
+    cache_ttl: int = Field(default=86400)
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if news cache has expired based on TTL."""
+        age = (datetime.now() - self.fetched_at).total_seconds()
+        return age > self.cache_ttl
+
+    @property
+    def has_content(self) -> bool:
+        """Check if news has non-empty content."""
+        return bool(self.content.strip())
+
+
 class Config(BaseModel):
     check_interval: int = Field(default=14400, ge=1)
     repository_url: str = Field(default="http://apt.pamir.ai")
@@ -54,6 +71,16 @@ class Config(BaseModel):
     policy_allow_new_packages: bool = Field(default=True)
     bundle_default: list[str] = Field(default_factory=list)
     apt_lists_path: Path = Field(default=Path("/var/lib/apt/lists"))
+
+    # News fetching configuration
+    news_enabled: bool = Field(default=True, description="Enable news fetching and display")
+    news_url: str = Field(default="https://apt.pamir.ai/NEWS", description="URL to fetch news from")
+    news_fetch_timeout: int = Field(
+        default=5, ge=1, le=30, description="Timeout for news HTTP requests"
+    )
+    news_cache_ttl: int = Field(
+        default=86400, ge=3600, description="News cache TTL in seconds (default: 24h)"
+    )
 
     # APT command timeout settings (in seconds)
     apt_update_timeout: int = Field(default=120, ge=30, description="Timeout for apt-get update")
