@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 import urllib.request
 from datetime import datetime
 
@@ -10,6 +11,12 @@ logger = structlog.get_logger()
 
 # Maximum news content size (4KB)
 MAX_NEWS_SIZE = 4096
+
+# Allowed URL schemes for security
+ALLOWED_SCHEMES = {"http", "https"}
+
+# Acceptable content types for news
+ALLOWED_CONTENT_TYPES = {"text/plain", "text/html", "text/markdown", "application/octet-stream"}
 
 
 class NewsFetcher:
@@ -25,6 +32,17 @@ class NewsFetcher:
             logger.debug("News fetching disabled")
             return None
 
+        # Validate URL scheme
+        parsed_url = urllib.parse.urlparse(self.config.news_url)
+        if parsed_url.scheme.lower() not in ALLOWED_SCHEMES:
+            logger.error(
+                "Invalid URL scheme for news fetch",
+                url=self.config.news_url,
+                scheme=parsed_url.scheme,
+                allowed=list(ALLOWED_SCHEMES),
+            )
+            return self.get_cached()
+
         try:
             logger.info("Fetching news", url=self.config.news_url)
 
@@ -34,6 +52,16 @@ class NewsFetcher:
             )
 
             with urllib.request.urlopen(req, timeout=self.config.news_fetch_timeout) as response:
+                content_type = (
+                    response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                )
+                if content_type and content_type not in ALLOWED_CONTENT_TYPES:
+                    logger.warning(
+                        "Unexpected content type for news",
+                        content_type=content_type,
+                        allowed=list(ALLOWED_CONTENT_TYPES),
+                    )
+
                 # Read with size limit
                 content = response.read(MAX_NEWS_SIZE + 1).decode("utf-8")
 
