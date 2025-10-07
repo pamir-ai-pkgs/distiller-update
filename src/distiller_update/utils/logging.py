@@ -1,9 +1,19 @@
+import logging
 from typing import Literal
 
 import structlog
 
 
 def setup_logging(log_level: Literal["debug", "info", "warning", "error"] = "info") -> None:
+    # Convert string log level to logging constant
+    numeric_level = getattr(logging, log_level.upper())
+
+    # Configure root logger level
+    logging.basicConfig(
+        level=numeric_level,
+        format="%(message)s",
+    )
+
     structlog.configure(
         processors=[
             structlog.stdlib.add_log_level,
