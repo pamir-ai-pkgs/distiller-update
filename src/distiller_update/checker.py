@@ -120,14 +120,12 @@ class UpdateChecker:
                     continue
                 seen_packages.add(name)
 
-                size = self._get_package_size(name)
-
                 packages.append(
                     Package(
                         name=name,
                         current_version=old_version,
                         new_version=new_version,
-                        size=size,
+                        size=0,
                     )
                 )
 
@@ -142,13 +140,12 @@ class UpdateChecker:
                 if cur is None:
                     cand = self.candidate_version(name)
                     if cand:
-                        size = self._get_package_size(name)
                         packages.append(
                             Package(
                                 name=name,
                                 current_version=None,
                                 new_version=cand,
-                                size=size,
+                                size=0,
                             )
                         )
 
@@ -156,6 +153,12 @@ class UpdateChecker:
         for p in packages:
             dedup[p.name] = p
         packages = sorted(dedup.values(), key=lambda p: (p.current_version is None, p.name))
+
+        # Batch fetch sizes for all packages
+        if packages:
+            package_sizes = self._get_package_sizes([p.name for p in packages])
+            for pkg in packages:
+                pkg.size = package_sizes.get(pkg.name, 0)
 
         logger.info(f"Found {len(packages)} actions")
         return packages
@@ -281,26 +284,47 @@ class UpdateChecker:
 
         return True
 
-    def _get_package_size(self, name: str) -> int:
-        """Get the download size of a package."""
+    def _get_package_sizes(self, package_names: list[str]) -> dict[str, int]:
+        """Get download sizes for multiple packages in a single query."""
+        if not package_names:
+            return {}
+
+        sizes: dict[str, int] = {}
+
         try:
             stdout, _, code = self._run_command(
-                ["apt-cache", "show", name], timeout=self.config.apt_query_timeout
+                ["apt-cache", "show", *package_names], timeout=self.config.apt_query_timeout * 2
             )
-            if code == 0:
-                for line in stdout.splitlines():
-                    if line.startswith("Size:"):
-                        size_str = line.split(":", 1)[1].strip()
-                        try:
-                            return int(size_str)
-                        except (ValueError, TypeError) as e:
-                            logger.warning(
-                                f"Invalid size value for {name}: {size_str}", error=str(e)
-                            )
-                            return 0
+
+            if code != 0:
+                logger.warning("Batch package size query failed, sizes will be unavailable")
+                return dict.fromkeys(package_names, 0)
+
+            current_package = None
+            for line in stdout.splitlines():
+                line = line.strip()
+
+                if line.startswith("Package:"):
+                    current_package = line.split(":", 1)[1].strip()
+
+                elif line.startswith("Size:") and current_package:
+                    size_str = line.split(":", 1)[1].strip()
+                    try:
+                        sizes[current_package] = int(size_str)
+                    except (ValueError, TypeError):
+                        logger.debug(f"Invalid size value for {current_package}: {size_str}")
+                        sizes[current_package] = 0
+
         except Exception as e:
-            logger.warning(f"Failed to get package size for {name}", error=str(e))
-        return 0
+            logger.warning("Failed to fetch package sizes in batch", error=str(e))
+            return dict.fromkeys(package_names, 0)
+
+        # Ensure all packages have a size entry
+        for name in package_names:
+            if name not in sizes:
+                sizes[name] = 0
+
+        return sizes
 
     def _save_result(self, result: UpdateResult) -> None:
         """Save the check result to cache."""

@@ -33,9 +33,7 @@ class NewsFetcher:
                 headers={"User-Agent": "distiller-update/2.1.0"},
             )
 
-            with urllib.request.urlopen(
-                req, timeout=self.config.news_fetch_timeout
-            ) as response:
+            with urllib.request.urlopen(req, timeout=self.config.news_fetch_timeout) as response:
                 # Read with size limit
                 content = response.read(MAX_NEWS_SIZE + 1).decode("utf-8")
 
