@@ -80,8 +80,7 @@ class UpdateChecker:
             logger.error("Failed to list upgradable packages", stderr=stderr)
             return []
 
-        packages: list[Package] = []
-        seen_packages: set[str] = set()
+        packages_dict: dict[str, Package] = {}
 
         for line in stdout.splitlines():
             if not line or line.startswith("Listing") or "/" not in line:
@@ -116,17 +115,14 @@ class UpdateChecker:
                 if self.config.distribution not in dist.lower():
                     continue
 
-                if name in seen_packages:
+                if name in packages_dict:
                     continue
-                seen_packages.add(name)
 
-                packages.append(
-                    Package(
-                        name=name,
-                        current_version=old_version,
-                        new_version=new_version,
-                        size=0,
-                    )
+                packages_dict[name] = Package(
+                    name=name,
+                    current_version=old_version,
+                    new_version=new_version,
+                    size=0,
                 )
 
             except Exception as e:
@@ -136,23 +132,21 @@ class UpdateChecker:
         # Add curated installs (only if allowed)
         if self.config.policy_allow_new_packages:
             for name in self.config.bundle_default:
+                if name in packages_dict:
+                    continue
+
                 cur = self.installed_version(name)
                 if cur is None:
                     cand = self.candidate_version(name)
                     if cand:
-                        packages.append(
-                            Package(
-                                name=name,
-                                current_version=None,
-                                new_version=cand,
-                                size=0,
-                            )
+                        packages_dict[name] = Package(
+                            name=name,
+                            current_version=None,
+                            new_version=cand,
+                            size=0,
                         )
 
-        dedup: dict[str, Package] = {}
-        for p in packages:
-            dedup[p.name] = p
-        packages = sorted(dedup.values(), key=lambda p: (p.current_version is None, p.name))
+        packages = sorted(packages_dict.values(), key=lambda p: (p.current_version is None, p.name))
 
         # Batch fetch sizes for all packages
         if packages:
