@@ -48,7 +48,7 @@ class NewsFetcher:
 
             req = urllib.request.Request(
                 self.config.news_url,
-                headers={"User-Agent": "distiller-update/2.1.0"},
+                headers={"User-Agent": "distiller-update/2.2.0"},
             )
 
             with urllib.request.urlopen(req, timeout=self.config.news_fetch_timeout) as response:

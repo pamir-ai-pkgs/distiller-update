@@ -1,3 +1,27 @@
+distiller-update (2.2.0) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * chore: Bump project version to v2.1.0
+  * feat(config): expand default bundle with kernel drivers and telemetry
+  * refactor(debian): simplify postinst installation logic
+  * style(debian): improve maintainer scripts formatting
+  * fix(debian): update repository URLs to pamir-ai-pkgs org
+  * fix(debian): update repository URLs and packaging metadata
+  * refactor(build): improve dependency checks and cross-compilation
+  * feat(news): add news fetching and caching system
+  * feat(daemon): integrate news fetching into update cycle
+  * feat(motd): display news alongside package updates
+  * style: fix code formatting and line length violations
+  * perf(checker): optimize APT package size queries with batching
+  * perf(daemon): wrap blocking I/O in async threads
+  * fix(daemon): resolve race condition between news and update checks
+  * refactor(checker): simplify package deduplication logic
+  * feat(news): add URL scheme and content-type validation
+  * refactor(daemon): simplify run_once() and ensure DBus connection reuse
+  * fix(logging): apply log_level parameter to root logger
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Wed, 08 Oct 2025 00:39:27 +0530
+
 distiller-update (2.1.0) unstable; urgency=medium
 
   [ utsavbalar1231 ]
