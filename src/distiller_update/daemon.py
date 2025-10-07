@@ -128,20 +128,8 @@ class UpdateDaemon:
         # Fetch news first to ensure MOTD notifier has latest news when notified
         self.news_fetcher.fetch()
 
-        # Only add notifiers if checker has none
-        if not self.checker.notifiers:
-            self.checker.add_notifier(MOTDNotifier(self.config))
-            if self.config.notify_dbus:
-                dbus_notifier = DBusNotifier(self.config)
-                self.checker.add_notifier(dbus_notifier)
-                try:
-                    self.checker.check()
-                finally:
-                    asyncio.run(dbus_notifier.close())
-            else:
-                self.checker.check()
-        else:
-            self.checker.check()
+        # Check for updates
+        self.checker.check()
 
 
 async def run_daemon(config_path: Path | None = None) -> None:
