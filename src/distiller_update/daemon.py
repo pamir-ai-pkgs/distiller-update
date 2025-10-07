@@ -56,8 +56,8 @@ class UpdateDaemon:
             )
 
         try:
-            self.checker.check()
-            self.news_fetcher.fetch()
+            await asyncio.to_thread(self.checker.check)
+            await asyncio.to_thread(self.news_fetcher.fetch)
             self.check_task = asyncio.create_task(self._check_loop())
             await self.check_task  # Wait for the check loop to complete
 
@@ -75,8 +75,8 @@ class UpdateDaemon:
             try:
                 if self._has_apt_cache_changed():
                     logger.info("APT cache changed, checking for updates")
-                    self.checker.check()
-                    self.news_fetcher.fetch()
+                    await asyncio.to_thread(self.checker.check)
+                    await asyncio.to_thread(self.news_fetcher.fetch)
                     self._update_apt_cache_mtime()
 
                 await asyncio.sleep(self.config.check_interval)
@@ -84,8 +84,8 @@ class UpdateDaemon:
                 if not self.running:
                     break
 
-                self.checker.check()
-                self.news_fetcher.fetch()
+                await asyncio.to_thread(self.checker.check)
+                await asyncio.to_thread(self.news_fetcher.fetch)
 
             except asyncio.CancelledError:
                 logger.debug("Check loop cancelled")
