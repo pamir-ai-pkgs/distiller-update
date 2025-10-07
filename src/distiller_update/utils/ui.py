@@ -34,6 +34,7 @@ def format_package_table(packages: list[Any], show_size: bool = True) -> Table:
     table.add_column("Available", style="green")
     if show_size:
         table.add_column("Size", style="cyan", justify="right")
+    table.add_column("Action", style="magenta")
 
     for pkg in packages:
         row = [
@@ -43,6 +44,7 @@ def format_package_table(packages: list[Any], show_size: bool = True) -> Table:
         ]
         if show_size:
             row.append(pkg.display_size if hasattr(pkg, "display_size") else str(pkg.size))
+        row.append(pkg.action_type if hasattr(pkg, "action_type") else "Upgrade")
         table.add_row(*row)
 
     return table

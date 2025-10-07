@@ -17,6 +17,21 @@ class Package(BaseModel):
     def display_size(self) -> str:
         return format_size(self.size)
 
+    @property
+    def is_reinstall(self) -> bool:
+        """Check if this is a reinstall (same version in repo as installed)."""
+        return self.current_version is not None and self.current_version == self.new_version
+
+    @property
+    def action_type(self) -> str:
+        """Get the action type: Install, Upgrade, or Reinstall."""
+        if self.current_version is None:
+            return "Install"
+        elif self.is_reinstall:
+            return "Reinstall"
+        else:
+            return "Upgrade"
+
 
 class UpdateResult(BaseModel):
     packages: list[Package] = Field(default_factory=list)

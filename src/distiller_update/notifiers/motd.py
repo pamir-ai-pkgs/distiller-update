@@ -90,8 +90,9 @@ class MOTDNotifier:
                 lines.append('echo "Packages to upgrade:"')
                 for pkg in result.packages:
                     size_str = f" ({pkg.display_size})" if pkg.size > 0 else ""
+                    reinstall_str = " (reinstall)" if pkg.is_reinstall else ""
                     lines.append(
-                        f'echo "  • {pkg.name}: {pkg.current_version} → {pkg.new_version}{size_str}"'
+                        f'echo "  • {pkg.name}: {pkg.current_version} → {pkg.new_version}{size_str}{reinstall_str}"'
                     )
             else:
                 total_size = result.total_size
