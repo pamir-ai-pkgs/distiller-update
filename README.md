@@ -123,4 +123,4 @@ uv run ruff check src/
 
 ## License
 
-MIT License - Copyright (c) 2024 PamirAI Incorporated
+MIT License - Copyright (c) 2025 PamirAI Incorporated
