@@ -38,7 +38,6 @@ sudo distiller-update check
 # List available updates
 sudo distiller-update list
 sudo distiller-update list --json      # JSON output for scripting
-sudo distiller-update list --refresh   # Force APT cache refresh
 
 # Apply available updates
 sudo distiller-update apply

@@ -108,29 +108,20 @@ def daemon(config: Annotated[Path | None, typer.Option("--config", "-c")] = None
 def list(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
-    refresh: Annotated[bool, typer.Option("--refresh")] = False,
 ) -> None:
     """List available updates."""
 
     cfg = get_config(config)
     checker = UpdateChecker(cfg)
 
-    if refresh:
-        with get_spinner("Refreshing package information..."):
-            packages = checker.check_updates(refresh=True)
-            result = UpdateResult(
-                packages=packages,
-                checked_at=datetime.now(),
-                distribution=cfg.distribution,
-            )
-        show_step("Package information refreshed", success=True)
-    else:
-        cached_result = checker.get_status()
-        if not cached_result:
-            console.print("[red]No cached update information.[/red]")
-            console.print("Run 'distiller-update check' first.")
-            raise typer.Exit(1)
-        result = cached_result
+    with get_spinner("Refreshing package information..."):
+        packages = checker.check_updates(refresh=True)
+        result = UpdateResult(
+            packages=packages,
+            checked_at=datetime.now(),
+            distribution=cfg.distribution,
+        )
+    show_step("Package information refreshed", success=True)
 
     if json_output:
         typer.echo(
