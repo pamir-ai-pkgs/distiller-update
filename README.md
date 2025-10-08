@@ -21,7 +21,7 @@ APT update checker for Pamir AI Distiller devices.
 uv sync
 
 # Or install the Debian package (recommended)
-./build-deb.sh
+just build
 sudo dpkg -i dist/distiller-update_*.deb
 ```
 
