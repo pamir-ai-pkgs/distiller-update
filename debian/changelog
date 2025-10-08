@@ -1,3 +1,9 @@
+distiller-update (2.2.1) unstable; urgency=medium
+
+  * fix: require root for list --refresh to prevent silent failures
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Wed, 08 Oct 2025 00:00:00 +0530
+
 distiller-update (2.2.0) unstable; urgency=medium
 
   [ utsavbalar1231 ]

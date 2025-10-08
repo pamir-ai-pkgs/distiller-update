@@ -148,6 +148,10 @@ def list(
 ) -> None:
     """List available updates."""
 
+    # Require root when --refresh is used
+    if refresh:
+        ensure_root()
+
     cfg = get_config(config)
 
     try:
