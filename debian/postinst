@@ -30,10 +30,6 @@ configure)
 	mkdir -p /var/cache/distiller-update
 	chmod 755 /var/cache/distiller-update
 
-	# Reload systemd
-	systemctl daemon-reload 2>/dev/null || true
-	systemctl enable distiller-update.timer 2>/dev/null || true
-
 	echo "INFO: distiller-update installed successfully."
 	echo "INFO: Start service: sudo systemctl start distiller-update.timer"
 	;;

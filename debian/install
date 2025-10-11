@@ -4,9 +4,6 @@ src/distiller_update/notifiers/*.py opt/distiller-update/src/distiller_update/no
 
 config/config.toml etc/distiller-update/
 
-debian/distiller-update.service etc/systemd/system/
-debian/distiller-update.timer etc/systemd/system/
-
 pyproject.toml opt/distiller-update/
 README.md opt/distiller-update/
 

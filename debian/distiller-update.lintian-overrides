@@ -1,0 +1,7 @@
+# Intentional installation to /opt for embedded device vendor application
+# APT update checker for Pamir AI Distiller edge devices
+distiller-update: dir-or-file-in-opt
+
+# Virtual environment permissions set at runtime by postinst
+# Required for uv package manager dynamic dependency resolution
+distiller-update: recursive-privilege-change

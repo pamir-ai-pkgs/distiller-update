@@ -26,7 +26,7 @@ override_dh_install:
 	mv debian/distiller-update/usr/bin/distiller-update-wrapper debian/distiller-update/usr/bin/distiller-update
 
 override_dh_installsystemd:
-	# Skip dh_installsystemd since we're installing to /etc/systemd/system manually
+	dh_installsystemd --name=distiller-update
 
 override_dh_fixperms:
 	dh_fixperms
