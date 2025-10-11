@@ -1,10 +1,8 @@
-src/distiller_update/utils/*.py opt/distiller-update/src/distiller_update/utils
-src/distiller_update/*.py opt/distiller-update/src/distiller_update/
-src/distiller_update/notifiers/*.py opt/distiller-update/src/distiller_update/notifiers/
+src/distiller_update/utils/*.py usr/lib/distiller-update/src/distiller_update/utils
+src/distiller_update/*.py usr/lib/distiller-update/src/distiller_update/
+src/distiller_update/notifiers/*.py usr/lib/distiller-update/src/distiller_update/notifiers/
 
 config/config.toml etc/distiller-update/
 
-pyproject.toml opt/distiller-update/
-README.md opt/distiller-update/
-
-debian/distiller-update-wrapper usr/bin/
+pyproject.toml usr/lib/distiller-update/
+README.md usr/lib/distiller-update/

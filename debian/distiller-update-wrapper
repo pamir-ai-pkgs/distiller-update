@@ -1,3 +1,0 @@
-#!/bin/sh
-
-exec /opt/distiller-update/.venv/bin/python -m distiller_update "$@"

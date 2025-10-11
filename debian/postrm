@@ -2,19 +2,21 @@
 set -e
 
 case "$1" in
-purge)
-	# Remove the virtual environment
-	[ -d /opt/distiller-update/.venv ] && rm -rf /opt/distiller-update/.venv
+purge | remove)
+	# Remove old /opt installation (migration from 2.1.x)
+	[ -d /opt/distiller-update ] && rm -rf /opt/distiller-update
+	[ -f usr/bin/distiller-update ] && rm -f usr/bin/distiller-update
 
-	# Remove cache directory
-	[ -d /var/cache/distiller-update ] && rm -rf /var/cache/distiller-update
+	# Uninstall tool
+	uv tool uninstall distiller-update 2>/dev/null || true
 
-	# Remove configuration directory if empty
-	[ -d /etc/distiller-update ] && \
-		rmdir --ignore-fail-on-non-empty /etc/distiller-update || true
+	if [ "$1" = "purge" ]; then
+		[ -d /var/cache/distiller-update ] && rm -rf /var/cache/distiller-update
+		[ -d /etc/distiller-update ] && rm -rf /etc/distiller-update
+	fi
 	;;
 
-remove | upgrade | failed-upgrade | abort-install | abort-upgrade | disappear) ;;
+upgrade | failed-upgrade | abort-install | abort-upgrade | disappear) ;;
 
 *)
 	echo "postrm called with unknown argument \`$1'" >&2

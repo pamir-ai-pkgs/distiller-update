@@ -1,6 +1,4 @@
 #!/bin/sh
-# Pre-removal script for distiller-update
-
 set -e
 
 case "$1" in

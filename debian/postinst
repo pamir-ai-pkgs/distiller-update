@@ -5,26 +5,18 @@ export PATH="/root/.local/bin:/root/.cargo/bin:$HOME/.local/bin:$HOME/.cargo/bin
 
 case "$1" in
 configure)
-	cd /opt/distiller-update
+	# Remove old /opt installation (migration from 2.1.x)
+	[ -d /opt/distiller-update ] && rm -rf /opt/distiller-update
+	[ -f usr/bin/distiller-update ] && rm -f usr/bin/distiller-update
 
-	# Setup virtual environment
-	[ -d ".venv" ] && rm -rf ".venv"
-	if ! uv venv --system-site-packages 2>/dev/null; then
-		echo "INFO: Creating venv without system-site-packages..."
-		uv venv || {
-			echo "ERROR: Failed to create virtual environment with uv"
-			exit 1
-		}
-	fi
+	cd /usr/lib/distiller-update
 
-	# Install dependencies
-	echo "INFO: Installing dependencies with uv sync..."
-	uv sync
-
-	# Set permissions
-	find /opt/distiller-update -type d -exec chmod 755 {} \; \
-		-o -type f -name "*.py" -exec chmod 644 {} \;
-	chmod +x /usr/bin/distiller-update
+	# Install as system tool using uv
+	echo "INFO: Installing distiller-update with uv tool..."
+	uv tool install --editable . || {
+		echo "ERROR: Failed to install distiller-update"
+		exit 1
+	}
 
 	# Ensure cache directory exists with proper permissions
 	mkdir -p /var/cache/distiller-update
