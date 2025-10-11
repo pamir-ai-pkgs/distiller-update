@@ -110,9 +110,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# UV package manager
-.uv/
-uv.lock
-
 # Claude
 CLAUDE.md

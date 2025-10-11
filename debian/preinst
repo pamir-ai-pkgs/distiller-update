@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+install | upgrade)
+	# Clean up old installation from /opt (migration from 2.1.x)
+	[ -d /opt/distiller-update ] && rm -rf /opt/distiller-update
+
+	# Clean up old wrapper script if it exists
+	[ -f /usr/bin/distiller-update ] && {
+		if grep -q "/opt/distiller-update" /usr/bin/distiller-update 2>/dev/null; then
+			rm -f /usr/bin/distiller-update
+		fi
+	}
+	;;
+
+abort-upgrade) ;;
+
+*)
+	echo "ERROR: preinst called with unknown argument \`$1'" >&2
+	exit 1
+	;;
+esac
+
+#DEBHELPER#
+
+exit 0

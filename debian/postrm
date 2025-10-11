@@ -2,24 +2,26 @@
 set -e
 
 case "$1" in
-purge | remove)
-	# Remove old /opt installation (migration from 2.1.x)
-	[ -d /opt/distiller-update ] && rm -rf /opt/distiller-update
-	[ -f usr/bin/distiller-update ] && rm -f usr/bin/distiller-update
+remove | purge)
+	[ -d /usr/lib/distiller-update/.venv ] &&
+		rm -rf /usr/lib/distiller-update/.venv
+	[ -f /etc/update-motd.d/99-distiller-updates ] &&
+		rm -f /etc/update-motd.d/99-distiller-updates
 
-	# Uninstall tool
-	uv tool uninstall distiller-update 2>/dev/null || true
-
-	if [ "$1" = "purge" ]; then
+	[ "$1" = "purge" ] && {
+		# Clean up cache and configuration
 		[ -d /var/cache/distiller-update ] && rm -rf /var/cache/distiller-update
 		[ -d /etc/distiller-update ] && rm -rf /etc/distiller-update
-	fi
+
+		# Clean up uv cache to save disk space
+		uv cache clean || true
+	}
 	;;
 
 upgrade | failed-upgrade | abort-install | abort-upgrade | disappear) ;;
 
 *)
-	echo "postrm called with unknown argument \`$1'" >&2
+	echo "ERROR: postrm called with unknown argument \`$1'" >&2
 	exit 1
 	;;
 esac

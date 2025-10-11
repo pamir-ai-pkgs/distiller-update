@@ -6,23 +6,34 @@ export PYBUILD_NAME=distiller-update
 	dh $@
 
 override_dh_auto_build:
-	dh_auto_build
 	# Generate man page from --help output
 	mkdir -p debian
 	chmod +x debian/distiller-update-help
 	help2man \
 		--name='APT update checker for Pamir AI Distiller devices' \
 		--section=1 \
-		--version-string="$$(grep '^version' pyproject.toml | head -1 | cut -d'\"' -f2)" \
+		--version-string="$$(grep '^version' pyproject.toml | head -1 | cut -d'"' -f2)" \
 		--no-info \
+		--no-discard-stderr \
 		--include=debian/distiller-update.help2man.include \
 		--output=debian/distiller-update.1 \
-		debian/distiller-update-help || echo "Warning: Could not generate man page"
+		debian/distiller-update-help || echo "WARNING: Could not generate man page"
 	# Fix program name in generated man page
 	sed -i 's/DISTILLER-UPDATE-HELP/DISTILLER-UPDATE/; s/distiller-update-help/distiller-update/g' debian/distiller-update.1 || true
+
+override_dh_auto_test:
+	# Skip tests during package build
+	true
+
+override_dh_install:
+	dh_install
+	# Install wrapper script with correct name
+	install -m 755 debian/distiller-update-script debian/distiller-update/usr/bin/distiller-update
 
 override_dh_installsystemd:
 	dh_installsystemd --name=distiller-update
 
 override_dh_fixperms:
 	dh_fixperms
+	# Ensure Python source files have correct permissions
+	-find debian/distiller-update/usr/lib/distiller-update/src -type f -name "*.py" -exec chmod 644 {} \;

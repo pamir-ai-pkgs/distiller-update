@@ -1,0 +1,14 @@
+#!/bin/bash
+# Console script wrapper for distiller-update
+
+set -e
+
+VENV_PYTHON="/usr/lib/distiller-update/.venv/bin/python"
+
+if [ ! -f "$VENV_PYTHON" ]; then
+    echo "ERROR: Virtual environment not found" >&2
+    echo "Please reinstall distiller-update package" >&2
+    exit 1
+fi
+
+exec "$VENV_PYTHON" -m distiller_update "$@"

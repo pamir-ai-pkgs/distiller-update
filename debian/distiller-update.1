@@ -2,36 +2,8 @@
 .TH DISTILLER-UPDATE "1" "October 2025" "distiller-update 2.2.0" "User Commands"
 .SH NAME
 distiller-update \- APT update checker for Pamir AI Distiller devices
-.SH SYNOPSIS
-.B python
-\fI\,-m distiller_update \/\fR[\fI\,OPTIONS\/\fR] \fI\,COMMAND \/\fR[\fI\,ARGS\/\fR]...
-.SH OPTIONS
-.TP
-\fB\-\-install\-completion\fR
-Install completion for the current shell.
-.TP
-\fB\-\-show\-completion\fR
-Show completion for the current shell, to copy it or
-customize the installation.
-.TP
-\fB\-\-help\fR
-Show this message and exit.
-.SS "Commands:"
-.TP
-check
-Check for updates.
-.TP
-daemon
-Run as daemon.
-.TP
-list
-List available updates.
-.TP
-apply
-Apply updates.
-.TP
-version
-Show version.
+.SH DESCRIPTION
+debian/distiller\-update\-help: line 8: exec: uv: not found
 .SH "SYSTEMD INTEGRATION"
 .B distiller-update
 includes a systemd timer unit that runs hourly checks automatically:

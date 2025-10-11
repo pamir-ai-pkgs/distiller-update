@@ -1,0 +1,5 @@
+src/distiller_update usr/lib/distiller-update/src/
+pyproject.toml usr/lib/distiller-update/
+uv.lock usr/lib/distiller-update/
+README.md usr/lib/distiller-update/
+config/config.toml etc/distiller-update/

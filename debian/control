@@ -15,8 +15,7 @@ Package: distiller-update
 Architecture: all
 Depends: ${misc:Depends},
          python3 (>= 3.11),
-         python3-venv,
-         python3-dev,
+         uv,
          apt,
          systemd
 Suggests: update-motd

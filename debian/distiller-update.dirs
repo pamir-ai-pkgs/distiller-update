@@ -1,0 +1,4 @@
+usr/bin
+usr/lib/distiller-update
+etc/distiller-update
+var/cache/distiller-update

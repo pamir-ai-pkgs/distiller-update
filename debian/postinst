@@ -1,20 +1,24 @@
 #!/bin/sh
 set -e
 
-export PATH="/root/.local/bin:/root/.cargo/bin:$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
-
 case "$1" in
 configure)
-	# Remove old /opt installation (migration from 2.1.x)
-	[ -d /opt/distiller-update ] && rm -rf /opt/distiller-update
-	[ -f usr/bin/distiller-update ] && rm -f usr/bin/distiller-update
-
 	cd /usr/lib/distiller-update
 
-	# Install as system tool using uv
-	echo "INFO: Installing distiller-update with uv tool..."
-	uv tool install --editable . || {
-		echo "ERROR: Failed to install distiller-update"
+	if [ ! -d .venv ]; then
+		uv venv || {
+			echo "ERROR: Failed to create virtual environment" >&2
+			exit 1
+		}
+	fi
+
+	# Enable bytecode compilation for faster startup
+	export UV_COMPILE_BYTECODE=1
+	export UV_LINK_MODE=copy
+
+	# Install the package
+	uv pip install --python .venv/bin/python --compile-bytecode . || {
+		echo "ERROR: Failed to install package" >&2
 		exit 1
 	}
 
@@ -29,7 +33,7 @@ configure)
 abort-upgrade | abort-remove | abort-deconfigure) ;;
 
 *)
-	echo "postinst called with unknown argument \`$1'" >&2
+	echo "ERROR: postinst called with unknown argument \`$1'" >&2
 	exit 1
 	;;
 esac

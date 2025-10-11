@@ -4,4 +4,5 @@
 
 export NO_COLOR=1
 export TERM=dumb
+
 exec uv run python -m distiller_update "$@"
