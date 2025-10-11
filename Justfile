@@ -36,3 +36,26 @@ lint:
 fix:
     uv run ruff check --fix src/
     uv run ruff format src/
+
+man:
+    #!/usr/bin/env bash
+    set -e
+    if ! command -v help2man &> /dev/null; then
+        echo "Error: help2man not found. Install with: sudo apt install help2man"
+        exit 1
+    fi
+    VERSION=$(grep '^version' pyproject.toml | head -1 | cut -d'"' -f2)
+    DATE=$(date '+%Y-%m-%d')
+    mkdir -p debian
+    chmod +x debian/distiller-update-help
+    help2man \
+        --name='APT update checker for Pamir AI Distiller devices' \
+        --section=1 \
+        --version-string="$VERSION" \
+        --no-info \
+        --include=debian/distiller-update.help2man.include \
+        --output=debian/distiller-update.1 \
+        debian/distiller-update-help
+    # Fix program name in generated man page
+    sed -i 's/DISTILLER-UPDATE-HELP/DISTILLER-UPDATE/; s/distiller-update-help/distiller-update/g' debian/distiller-update.1
+    echo "Generated debian/distiller-update.1 (version $VERSION, $DATE)"

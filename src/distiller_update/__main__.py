@@ -24,7 +24,12 @@ from .utils.ui import (
     show_step,
 )
 
-app = typer.Typer(name="distiller-update", no_args_is_help=True)
+app = typer.Typer(
+    name="distiller-update",
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
+    rich_markup_mode=None if os.getenv("TERM") == "dumb" else "rich",
+)
 
 
 def ensure_root() -> None:

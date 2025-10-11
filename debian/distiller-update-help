@@ -1,0 +1,7 @@
+#!/bin/bash
+# Wrapper script for help2man to generate clean man pages
+# Sets environment variables to disable Rich formatting
+
+export NO_COLOR=1
+export TERM=dumb
+exec uv run python -m distiller_update "$@"

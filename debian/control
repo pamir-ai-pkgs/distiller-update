@@ -3,7 +3,8 @@ Section: admin
 Priority: optional
 Maintainer: PamirAI Incorporated <founders@pamir.ai>
 Build-Depends: debhelper-compat (= 13),
-               python3-all (>= 3.11)
+               python3-all (>= 3.11),
+               help2man
 Standards-Version: 4.7.0
 Homepage: https://github.com/pamir-ai-pkgs/distiller-update
 Vcs-Git: https://github.com/pamir-ai-pkgs/distiller-update.git
