@@ -53,6 +53,13 @@ def check(
     """Check for updates."""
     ensure_root()
 
+    if quiet:
+        setup_logging("error")
+    elif verbose:
+        setup_logging("debug")
+    else:
+        setup_logging("warning")
+
     cfg = get_config(config)
     daemon = UpdateDaemon(cfg)
 
@@ -98,7 +105,11 @@ def daemon(config: Annotated[Path | None, typer.Option("--config", "-c")] = None
     ensure_root()
 
     async def run() -> None:
+        setup_logging("warning")
         cfg = get_config(config)
+
+        # Reconfigure with config file's log level
+        setup_logging(cfg.log_level)
         daemon = UpdateDaemon(cfg)
         await daemon.start()
 
@@ -115,6 +126,7 @@ def list(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """List available updates."""
+    setup_logging("warning")
 
     cfg = get_config(config)
     checker = UpdateChecker(cfg)
@@ -171,6 +183,7 @@ def apply(
 ) -> None:
     """Apply updates."""
     ensure_root()
+    setup_logging("warning")
 
     cfg = get_config(config)
     checker = UpdateChecker(cfg)
@@ -225,7 +238,6 @@ def version() -> None:
 
 
 def main() -> None:
-    setup_logging()
     app()
 
 
