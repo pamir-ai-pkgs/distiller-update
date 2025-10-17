@@ -1,3 +1,21 @@
+distiller-update (3.0.0) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * feat(ui): add action type column to package update displays
+  * docs(readme): expand usage documentation and feature list
+  * refactor(build): replace build-deb.sh with Justfile
+  * chore(main): make refresh default in distiller-update list
+  * fix(docs): update license year
+  * build: add lintian debian profile to debuild
+  * feat(debian): add auto man page creation
+  * refactor(debian): integrate proper debhelper integration
+  * refactor(debian): migrate from /opt to /usr/lib using uv tool install
+  * refactor(debian): restructure packaging for FHS compliance
+  * fix(cli): suppress info logs in command output by default
+  * chore(debian): add git-buildpackage configuratio
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Sat, 18 Oct 2025 00:18:58 +0530
+
 distiller-update (2.2.0) unstable; urgency=medium
 
   [ utsavbalar1231 ]
