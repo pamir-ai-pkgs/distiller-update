@@ -67,19 +67,35 @@ class UpdateChecker:
             raise
 
     def check_updates(self, refresh: bool = True) -> list[Package]:
-        """Check for available updates using APT."""
+        """Check for available updates using APT.
+
+        Uses isolated cache if apt_source_file is configured to avoid reading
+        stale data from system cache.
+        """
         if refresh:
             update_success = self._update_cache()
             if not update_success:
                 logger.warning("Cache update failed, checking with existing cache")
 
-        stdout, stderr, code = self._run_command(
-            ["apt", "list", "--upgradable"], timeout=self.config.apt_list_timeout
+        # Build apt list command with cache options if using isolated cache
+        cmd = ["apt", "list", "--upgradable"]
+        cache_opts = self._get_apt_cache_options()
+        cmd.extend(cache_opts)
+
+        logger.debug(
+            "Listing upgradable packages",
+            command=" ".join(cmd),
+            using_isolated_cache=bool(self.config.apt_source_file)
         )
 
+        stdout, stderr, code = self._run_command(cmd, timeout=self.config.apt_list_timeout)
+
         if code != 0:
-            logger.error("Failed to list upgradable packages", stderr=stderr)
+            logger.error("Failed to list upgradable packages", stderr=stderr, command=" ".join(cmd))
             return []
+
+        if stderr:
+            logger.debug("apt list stderr output", stderr=stderr)
 
         packages_dict: dict[str, Package] = {}
 
@@ -113,7 +129,9 @@ class UpdateChecker:
                     logger.warning(f"Invalid package name '{name}': {e}")
                     continue
 
-                if self.config.distribution not in dist.lower():
+                # Skip distribution filtering when using selective source updates
+                # (trust all packages from explicitly selected source)
+                if self.config.apt_source_file is None and self.config.distribution != dist.lower():
                     continue
 
                 if name in packages_dict:
@@ -159,7 +177,10 @@ class UpdateChecker:
         return packages
 
     def apply(self, actions: list[Package]) -> dict[str, Any]:
-        """Apply package updates/installations."""
+        """Apply package updates/installations.
+
+        Always uses system cache with all sources to ensure dependencies are available.
+        """
         lock_path = "/run/distiller-update.lock"
         os.makedirs("/run", exist_ok=True)
 
@@ -183,7 +204,8 @@ class UpdateChecker:
                 led_controller.set_updating()
                 led_status = "updating"
 
-                self._update_cache()
+                # Always use full system cache update for installations to ensure all dependencies available
+                self._update_cache(force_full_update=True)
 
                 to_upgrade = [a for a in actions if a.current_version]
                 to_install = [a for a in actions if a.current_version is None]
@@ -247,10 +269,14 @@ class UpdateChecker:
         return None
 
     def candidate_version(self, name: str) -> str | None:
-        """Get the candidate version from APT cache."""
-        stdout, _, code = self._run_command(
-            ["apt-cache", "policy", name], timeout=self.config.apt_query_timeout
-        )
+        """Get the candidate version from APT cache.
+
+        Uses isolated cache if apt_source_file is configured.
+        """
+        cmd = ["apt-cache", "policy", name]
+        cmd.extend(self._get_apt_cache_options())
+
+        stdout, _, code = self._run_command(cmd, timeout=self.config.apt_query_timeout)
         if code != 0:
             return None
         for line in stdout.splitlines():
@@ -263,6 +289,27 @@ class UpdateChecker:
     def get_status(self) -> UpdateResult | None:
         """Get the last cached update check result."""
         return self._load_cached_result()
+
+    def _get_apt_cache_options(self) -> list[str]:
+        """Get APT cache directory options for isolated cache operations.
+
+        Returns command-line options to isolate APT cache when apt_source_file is configured.
+        This prevents distiller-update from modifying the system APT cache.
+        """
+        if not self.config.apt_source_file:
+            return []
+
+        cache_dir = str(self.config.apt_cache_dir)
+        return [
+            "-o",
+            f"Dir::State::lists={cache_dir}/lists",
+            "-o",
+            f"Dir::Cache={cache_dir}/cache",
+            "-o",
+            f"Dir::Cache::srcpkgcache={cache_dir}/cache/srcpkgcache.bin",
+            "-o",
+            f"Dir::Cache::pkgcache={cache_dir}/cache/pkgcache.bin",
+        ]
 
     def _run_command(self, cmd: list[str], timeout: float = 30.0) -> tuple[str, str, int]:
         """Run a system command and return stdout, stderr, and return code."""
@@ -287,13 +334,25 @@ class UpdateChecker:
             logger.error("Command failed", cmd=cmd, error=str(e))
             return "", str(e), 1
 
-    def _update_cache(self) -> bool:
-        """Update the APT cache."""
-        # Build apt-get update command
+    def _update_cache(self, force_full_update: bool = False) -> bool:
+        """Update the APT cache.
+
+        Args:
+            force_full_update: If True, always update all sources using system cache.
+                             Used by apply() to ensure all dependencies are available.
+
+        If apt_source_file is configured and force_full_update is False, uses an
+        isolated cache directory to prevent interference with the system APT cache.
+        Otherwise updates all sources using the system cache.
+        """
         cmd = ["apt-get", "update"]
 
-        # If apt_source_file is configured, only update that specific repository
-        if self.config.apt_source_file:
+        # Use isolated cache for selective updates, unless force_full_update is set
+        if self.config.apt_source_file and not force_full_update:
+            # Add isolated cache directory options
+            cmd.extend(self._get_apt_cache_options())
+
+            # Only update the specified source file
             cmd.extend(
                 [
                     "-o",
@@ -302,29 +361,50 @@ class UpdateChecker:
                     "Dir::Etc::sourceparts=-",
                 ]
             )
-            logger.debug(f"Updating only {self.config.apt_source_file}")
+            logger.info(
+                "Updating isolated APT cache",
+                source_file=self.config.apt_source_file,
+                cache_dir=str(self.config.apt_cache_dir),
+                command=" ".join(cmd)
+            )
         else:
-            logger.debug("Updating all APT sources")
+            logger.info("Updating all APT sources in system cache", command=" ".join(cmd))
 
-        _stdout, stderr, code = self._run_command(cmd, timeout=self.config.apt_update_timeout)
+        stdout, stderr, code = self._run_command(cmd, timeout=self.config.apt_update_timeout)
 
         if code != 0:
-            logger.warning("Failed to update cache", stderr=stderr)
+            logger.error(
+                "Failed to update cache",
+                stderr=stderr,
+                stdout=stdout,
+                command=" ".join(cmd),
+                return_code=code
+            )
             return False
+
+        if stderr:
+            logger.debug("apt-get update stderr output", stderr=stderr)
+
+        if stdout:
+            logger.debug("apt-get update completed", stdout_preview=stdout[:200])
 
         return True
 
     def _get_package_sizes(self, package_names: list[str]) -> dict[str, int]:
-        """Get download sizes for multiple packages in a single query."""
+        """Get download sizes for multiple packages in a single query.
+
+        Uses isolated cache if apt_source_file is configured.
+        """
         if not package_names:
             return {}
 
         sizes: dict[str, int] = {}
 
         try:
-            stdout, _, code = self._run_command(
-                ["apt-cache", "show", *package_names], timeout=self.config.apt_query_timeout * 2
-            )
+            cmd = ["apt-cache", "show", *package_names]
+            cmd.extend(self._get_apt_cache_options())
+
+            stdout, _, code = self._run_command(cmd, timeout=self.config.apt_query_timeout * 2)
 
             if code != 0:
                 logger.warning("Batch package size query failed, sizes will be unavailable")

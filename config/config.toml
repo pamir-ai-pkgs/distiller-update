@@ -5,7 +5,7 @@ check_interval = 3600
 
 # APT repository settings
 repository_url = "http://apt.pamir.ai"
-distribution = "unstable"  # Options: stable, testing, unstable
+distribution = "testing"  # Options: stable, testing, unstable
 
 # Notification settings
 notify_motd = true   # Show updates in terminal MOTD
@@ -24,10 +24,15 @@ apt_list_timeout = 60       # Timeout for apt list --upgradable
 apt_query_timeout = 10      # Timeout for quick apt queries
 apt_install_timeout = 1800  # Timeout for package installation
 
-# APT update optimization
-# Only update the pamir.ai repository for faster checks (~1-2s instead of ~9-10s)
-# Comment out to update all repositories
-apt_source_file = "sources.list.d/pamir-ai.list"
+# APT update optimization (with isolated cache)
+# When set, only updates the specified repository in an isolated APT cache directory.
+# MUST be an absolute path (e.g., "/etc/apt/sources.list.d/pamir-ai.list")
+# Comment out or set to None to update all repositories in system cache (default).
+apt_source_file = "/etc/apt/sources.list.d/pamir-ai.list"
+
+# Isolated APT cache directory (only used when apt_source_file is set)
+# Prevents distiller-update from modifying system APT cache at /var/lib/apt/lists/
+apt_cache_dir = "/var/cache/distiller-update/apt-cache"
 
 # Policy settings
 [policy]

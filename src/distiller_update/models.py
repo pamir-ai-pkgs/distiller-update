@@ -91,6 +91,11 @@ class Config(BaseModel):
         description="Optional: APT source file to update (e.g., 'sources.list.d/pamir-ai.list'). "
         "If set, only this source will be updated for faster checks. If None, all sources are updated.",
     )
+    apt_cache_dir: Path = Field(
+        default=Path("/var/cache/distiller-update/apt-cache"),
+        description="Isolated APT cache directory for distiller-update operations. "
+        "Prevents interference with system APT cache when apt_source_file is set.",
+    )
 
     # News fetching configuration
     news_enabled: bool = Field(default=True, description="Enable news fetching and display")
@@ -116,3 +121,7 @@ class Config(BaseModel):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         if self.notify_motd:
             self.motd_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create isolated APT cache directories
+        (self.apt_cache_dir / "lists" / "partial").mkdir(parents=True, exist_ok=True)
+        (self.apt_cache_dir / "cache").mkdir(parents=True, exist_ok=True)

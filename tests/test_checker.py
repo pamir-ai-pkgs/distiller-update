@@ -49,8 +49,13 @@ class TestUpdateChecker:
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
         motd_file = tmp_path / "motd" / "99-distiller-updates"
+        apt_cache_dir = tmp_path / "apt-cache"
         return Config(
-            cache_dir=cache_dir, motd_file=motd_file, check_interval=3600, distribution="stable"
+            cache_dir=cache_dir,
+            motd_file=motd_file,
+            apt_cache_dir=apt_cache_dir,
+            check_interval=3600,
+            distribution="stable",
         )
 
     @pytest.fixture
@@ -216,3 +221,70 @@ class TestUpdateChecker:
         with pytest.raises(Exception) as exc_info:
             checker.check()
         assert "APT failed" in str(exc_info.value)
+
+    @patch("distiller_update.checker.subprocess.run")
+    def test_check_updates_filters_by_distribution(self, mock_run, checker):
+        """Test that distribution filtering is applied when apt_source_file is None."""
+        # Checker is configured for 'stable' distribution
+        assert checker.config.distribution == "stable"
+        assert checker.config.apt_source_file is None
+
+        mock_run.side_effect = [
+            Mock(stdout="", stderr="", returncode=0),  # apt-get update
+            Mock(
+                stdout="Listing...\n"
+                "package1/stable 2.0 amd64 [upgradable from: 1.0]\n"
+                "package2/testing 3.0 amd64 [upgradable from: 2.0]\n"
+                "package3/unstable 4.0 amd64 [upgradable from: 3.0]\n",
+                stderr="",
+                returncode=0,
+            ),  # apt list
+            Mock(stdout="Size: 1024\n", stderr="", returncode=0),  # size query
+        ]
+
+        packages = checker.check_updates()
+
+        # Only package1 should be included (stable distribution)
+        assert len(packages) == 1
+        assert packages[0].name == "package1"
+
+    @patch("distiller_update.checker.subprocess.run")
+    def test_check_updates_skips_filter_with_apt_source_file(self, mock_run, tmp_path):
+        """Test that distribution filtering is skipped when apt_source_file is set."""
+        # Create checker with apt_source_file configured
+        config = Config(
+            cache_dir=tmp_path / "cache",
+            motd_file=tmp_path / "motd" / "99-distiller-updates",
+            apt_cache_dir=tmp_path / "apt-cache",
+            check_interval=3600,
+            distribution="stable",
+            apt_source_file="sources.list.d/pamir-ai.list",
+        )
+        checker = UpdateChecker(config)
+
+        mock_run.side_effect = [
+            Mock(stdout="", stderr="", returncode=0),  # apt-get update
+            Mock(
+                stdout="Listing...\n"
+                "package1/stable 2.0 amd64 [upgradable from: 1.0]\n"
+                "package2/testing 3.0 amd64 [upgradable from: 2.0]\n"
+                "package3/unstable 4.0 amd64 [upgradable from: 3.0]\n",
+                stderr="",
+                returncode=0,
+            ),  # apt list
+            Mock(
+                stdout="Package: package1\nSize: 1024\n\n"
+                "Package: package2\nSize: 2048\n\n"
+                "Package: package3\nSize: 4096\n",
+                stderr="",
+                returncode=0,
+            ),  # batch size query
+        ]
+
+        packages = checker.check_updates()
+
+        # All packages should be included (no distribution filtering)
+        assert len(packages) == 3
+        assert packages[0].name == "package1"
+        assert packages[1].name == "package2"
+        assert packages[2].name == "package3"
