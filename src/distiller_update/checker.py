@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 import structlog
 
+from .led_controller import LEDController
 from .models import Config, Package, UpdateResult
 from .utils.logging import setup_logging
 
@@ -162,14 +163,25 @@ class UpdateChecker:
         lock_path = "/run/distiller-update.lock"
         os.makedirs("/run", exist_ok=True)
 
+        led_controller = LEDController()
+        led_status = "disabled" if not led_controller.enabled else "idle"
+
         try:
             with open(lock_path, "w") as lockf:
                 try:
                     fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
-                    return {"ok": False, "rc": 1, "error": "Another update is running"}
+                    return {
+                        "ok": False,
+                        "rc": 1,
+                        "error": "Another update is running",
+                        "led_status": led_status,
+                    }
 
                 started_at = datetime.now()
+
+                led_controller.set_updating()
+                led_status = "updating"
 
                 self._update_cache()
 
@@ -203,6 +215,13 @@ class UpdateChecker:
                         ok = False
                         rc = rc or 2
 
+                if ok:
+                    led_controller.set_success()
+                    led_status = "success"
+                else:
+                    led_controller.turn_off()
+                    led_status = "error"
+
                 finished_at = datetime.now()
                 return {
                     "ok": ok,
@@ -210,10 +229,13 @@ class UpdateChecker:
                     "started_at": started_at.isoformat() + "Z",
                     "finished_at": finished_at.isoformat() + "Z",
                     "results": results,
+                    "led_status": led_status,
                 }
         except Exception as e:
             logger.error("Apply failed", error=str(e))
-            return {"ok": False, "rc": 3, "error": str(e)}
+            led_controller.turn_off()
+            led_status = "error"
+            return {"ok": False, "rc": 3, "error": str(e), "led_status": led_status}
 
     def installed_version(self, name: str) -> str | None:
         """Get the currently installed version of a package."""

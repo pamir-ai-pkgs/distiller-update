@@ -73,6 +73,10 @@ warn_unused_ignores = true
 warn_no_return = true
 follow_imports = "normal"
 
+[[tool.mypy.overrides]]
+module = "distiller_sdk.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"

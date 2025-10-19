@@ -8,6 +8,7 @@ APT update checker for Pamir AI Distiller devices.
 - **News integration** - Fetches and displays news from Pamir AI on terminal login
 - **Automated monitoring** - Systemd timer runs checks hourly with intelligent caching
 - **Desktop notifications** - DBus integration for desktop alerts
+- **LED status indicators** - Visual feedback during updates (blue fade in progress, green fade on success)
 - **MOTD integration** - Terminal login notifications with news and update status
 - **Security validation** - Package name validation, command timeouts, and lock files
 - **JSON output** - Scriptable with `--json` flag for automation
@@ -99,6 +100,26 @@ sudo journalctl -u distiller-update -f
 # Manually trigger a check (timer does this automatically)
 sudo systemctl start distiller-update.service
 ```
+
+## LED Status Indicators
+
+Visual feedback is provided through hardware LEDs during package updates:
+
+**LED States:**
+- **Blue fade** - Update in progress (continuous fade animation)
+- **Green fade** - Update successful (fades for 10 seconds, then turns off)
+- **Off** - Idle or error state
+
+**During `sudo distiller-update apply`:**
+1. LEDs start blue fade when installation begins
+2. APT operations proceed while LEDs continue fading
+3. On success: LEDs switch to green fade for 10 seconds, then turn off
+4. On error: LEDs turn off immediately
+
+**Requirements:**
+- Requires `distiller-sdk >= 3.0.0` for LED support
+- Gracefully degrades if hardware or SDK unavailable
+- Update operations continue regardless of LED status
 
 ## Troubleshooting
 

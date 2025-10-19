@@ -17,7 +17,8 @@ Depends: ${misc:Depends},
          python3 (>= 3.11),
          uv,
          apt,
-         systemd
+         systemd,
+         distiller-sdk (>= 3.0.0)
 Suggests: update-motd
 Description: Update notification system for Distiller by Pamir-AI
  Automated APT update checker with systemd integration for Distiller
@@ -28,6 +29,7 @@ Description: Update notification system for Distiller by Pamir-AI
   - System integration via systemd timer (daily checks)
   - MOTD (Message of the Day) notifications for SSH sessions
   - D-Bus notification support for desktop environments
+  - LED status indicators (blue fade during update, green fade on success)
   - CLI for manual update checking and package management
   - Configurable update policies and notification preferences
  .

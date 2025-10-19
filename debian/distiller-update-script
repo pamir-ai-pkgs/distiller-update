@@ -11,4 +11,6 @@ if [ ! -f "$VENV_PYTHON" ]; then
     exit 1
 fi
 
+export PYTHONPATH="/opt/distiller-sdk/src:$PYTHONPATH"
+
 exec "$VENV_PYTHON" -m distiller_update "$@"
