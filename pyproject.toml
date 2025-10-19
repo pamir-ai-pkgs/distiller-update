@@ -1,6 +1,6 @@
 [project]
 name = "distiller-update"
-version = "3.0.0"
+version = "3.1.0"
 description = "APT update checker for Pamir AI Distiller devices"
 readme = "README.md"
 requires-python = ">=3.11"

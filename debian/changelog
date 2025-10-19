@@ -1,3 +1,14 @@
+distiller-update (3.1.0) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * feat(config): add selective APT source updating for faster checks
+  * feat(led): add LED status indicators for package updates
+  * refactor(version): use importlib.metadata for dynamic version retrieval
+  * fix(checker): correct distribution filtering logic for selective updates
+  * feat(led): add red blink indicator for package update errors
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Mon, 20 Oct 2025 15:16:13 +0530
+
 distiller-update (3.0.0) unstable; urgency=medium
 
   [ utsavbalar1231 ]
