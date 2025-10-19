@@ -24,6 +24,11 @@ apt_list_timeout = 60       # Timeout for apt list --upgradable
 apt_query_timeout = 10      # Timeout for quick apt queries
 apt_install_timeout = 1800  # Timeout for package installation
 
+# APT update optimization
+# Only update the pamir.ai repository for faster checks (~1-2s instead of ~9-10s)
+# Comment out to update all repositories
+apt_source_file = "sources.list.d/pamir-ai.list"
+
 # Policy settings
 [policy]
 restrict_prefixes = ["pamir-ai-", "distiller-", "claude-code-"]

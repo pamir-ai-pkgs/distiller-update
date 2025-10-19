@@ -76,6 +76,9 @@ apt_list_timeout = 60               # apt list --upgradable
 apt_query_timeout = 10              # Quick queries (dpkg, apt-cache)
 apt_install_timeout = 1800          # Package installation (30 minutes)
 
+# APT update optimization (reduces check time from ~9s to ~1-2s)
+apt_source_file = "sources.list.d/pamir-ai.list"  # Only update pamir.ai repo
+
 # Policy settings
 policy_allow_new_packages = true    # Allow installation of curated new packages
 ```

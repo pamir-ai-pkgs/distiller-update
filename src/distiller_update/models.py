@@ -86,6 +86,11 @@ class Config(BaseModel):
     policy_allow_new_packages: bool = Field(default=True)
     bundle_default: list[str] = Field(default_factory=list)
     apt_lists_path: Path = Field(default=Path("/var/lib/apt/lists"))
+    apt_source_file: str | None = Field(
+        default=None,
+        description="Optional: APT source file to update (e.g., 'sources.list.d/pamir-ai.list'). "
+        "If set, only this source will be updated for faster checks. If None, all sources are updated.",
+    )
 
     # News fetching configuration
     news_enabled: bool = Field(default=True, description="Enable news fetching and display")

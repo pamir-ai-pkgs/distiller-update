@@ -267,10 +267,24 @@ class UpdateChecker:
 
     def _update_cache(self) -> bool:
         """Update the APT cache."""
-        # Remove -qq to show some progress to the user
-        _stdout, stderr, code = self._run_command(
-            ["apt-get", "update"], timeout=self.config.apt_update_timeout
-        )
+        # Build apt-get update command
+        cmd = ["apt-get", "update"]
+
+        # If apt_source_file is configured, only update that specific repository
+        if self.config.apt_source_file:
+            cmd.extend(
+                [
+                    "-o",
+                    f"Dir::Etc::sourcelist={self.config.apt_source_file}",
+                    "-o",
+                    "Dir::Etc::sourceparts=-",
+                ]
+            )
+            logger.debug(f"Updating only {self.config.apt_source_file}")
+        else:
+            logger.debug("Updating all APT sources")
+
+        _stdout, stderr, code = self._run_command(cmd, timeout=self.config.apt_update_timeout)
 
         if code != 0:
             logger.warning("Failed to update cache", stderr=stderr)
