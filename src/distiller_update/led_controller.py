@@ -11,10 +11,11 @@ class LEDController:
     """
     Controller for LED status indicators during updates.
 
-    Provides visual feedback using distiller-sdk LED fade animations:
+    Provides visual feedback using distiller-sdk LED animations:
     - Blue fade: Update in progress
     - Green fade: Update successful (10 seconds)
-    - Off: Idle or error state
+    - Red blink: Update failed (10 seconds)
+    - Off: Idle state
 
     LED operations gracefully degrade if SDK or hardware unavailable.
     """
@@ -86,6 +87,28 @@ class LEDController:
             self.turn_off()
         except Exception as e:
             logger.error("Failed to set success LED state", error=str(e), exc_info=True)
+            self.turn_off()
+
+    def set_error(self) -> None:
+        """
+        Set all LEDs to red blink for 10 seconds, then turn off.
+
+        Red blink indicates update failure or error.
+        Blocks for 10 seconds while animation runs.
+        """
+        if not self.enabled or not self.led:
+            return
+
+        try:
+            self.led.set_color_all(255, 0, 0)
+
+            for led_id in self.available_leds:
+                self.led.set_animation_mode(led_id, "blink", 1000)
+
+            time.sleep(10)
+            self.turn_off()
+        except Exception as e:
+            logger.error("Failed to set error LED state", error=str(e), exc_info=True)
             self.turn_off()
 
     def turn_off(self) -> None:

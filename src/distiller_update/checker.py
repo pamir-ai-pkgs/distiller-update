@@ -241,7 +241,7 @@ class UpdateChecker:
                     led_controller.set_success()
                     led_status = "success"
                 else:
-                    led_controller.turn_off()
+                    led_controller.set_error()
                     led_status = "error"
 
                 finished_at = datetime.now()
@@ -255,7 +255,7 @@ class UpdateChecker:
                 }
         except Exception as e:
             logger.error("Apply failed", error=str(e))
-            led_controller.turn_off()
+            led_controller.set_error()
             led_status = "error"
             return {"ok": False, "rc": 3, "error": str(e), "led_status": led_status}
 
