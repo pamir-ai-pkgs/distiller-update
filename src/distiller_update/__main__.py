@@ -209,13 +209,11 @@ def apply(
             console.print(f"  → {pkg.name}: {pkg.current_version or '(new)'} → {pkg.new_version}")
         console.print()
 
-        # Show progress during installation
-        with get_spinner("Installing packages (this may take a while)..."):
-            result = checker.apply(actions)
-    else:
-        result = checker.apply(actions)
+    # Run installation with native APT output
+    result = checker.apply(actions)
 
     if json_output:
+        # Emit result as JSON
         typer.echo(json.dumps(result, indent=2, default=str))
     else:
         if result.get("ok"):

@@ -85,7 +85,7 @@ class UpdateChecker:
         logger.debug(
             "Listing upgradable packages",
             command=" ".join(cmd),
-            using_isolated_cache=bool(self.config.apt_source_file)
+            using_isolated_cache=bool(self.config.apt_source_file),
         )
 
         stdout, stderr, code = self._run_command(cmd, timeout=self.config.apt_list_timeout)
@@ -180,6 +180,9 @@ class UpdateChecker:
         """Apply package updates/installations.
 
         Always uses system cache with all sources to ensure dependencies are available.
+
+        Args:
+            actions: List of packages to install/upgrade
         """
         lock_path = "/run/distiller-update.lock"
         os.makedirs("/run", exist_ok=True)
@@ -214,10 +217,13 @@ class UpdateChecker:
                     in_args = [f"{p.name}={p.new_version}" for p in to_install]
 
                     rc = 0
+
+                    # Run apt-get with native progress output (no streaming/callbacks)
                     if up_args:
                         _, _, code = self._run_command(
                             ["apt-get", "install", "-y", "--only-upgrade", *up_args],
                             timeout=self.config.apt_install_timeout,
+                            capture_output=False,
                         )
                         rc = max(rc, code)
 
@@ -225,6 +231,7 @@ class UpdateChecker:
                         _, _, code = self._run_command(
                             ["apt-get", "install", "-y", *in_args],
                             timeout=self.config.apt_install_timeout,
+                            capture_output=False,
                         )
                         rc = max(rc, code)
 
@@ -232,7 +239,9 @@ class UpdateChecker:
                     results = []
                     for p in actions:
                         cur = self.installed_version(p.name)
-                        results.append({"name": p.name, "installed": cur, "expected": p.new_version})
+                        results.append(
+                            {"name": p.name, "installed": cur, "expected": p.new_version}
+                        )
                         if cur != p.new_version:
                             ok = False
                             rc = rc or 2
@@ -253,6 +262,11 @@ class UpdateChecker:
                         "results": results,
                         "led_status": led_status,
                     }
+
+            except KeyboardInterrupt:
+                logger.info("Installation interrupted by user")
+                raise
+
             except Exception as e:
                 logger.error("Apply failed", error=str(e))
                 led_controller.set_error()
@@ -311,20 +325,28 @@ class UpdateChecker:
             f"Dir::Cache::pkgcache={cache_dir}/cache/pkgcache.bin",
         ]
 
-    def _run_command(self, cmd: list[str], timeout: float = 30.0) -> tuple[str, str, int]:
-        """Run a system command and return stdout, stderr, and return code."""
+    def _run_command(
+        self, cmd: list[str], timeout: float = 30.0, capture_output: bool = True
+    ) -> tuple[str, str, int]:
+        """Run a system command and return stdout, stderr, and return code.
+
+        Args:
+            cmd: Command and arguments to run
+            timeout: Timeout in seconds
+            capture_output: If True, capture stdout/stderr. If False, output goes to terminal.
+        """
         try:
             # Direct command execution without security validation - APT handles security internally
             result = subprocess.run(
                 cmd,
-                capture_output=True,
+                capture_output=capture_output,
                 text=True,
                 timeout=timeout,
                 env={"DEBIAN_FRONTEND": "noninteractive", "PATH": "/usr/bin:/bin"},
             )
             return (
-                result.stdout,
-                result.stderr,
+                result.stdout if capture_output else "",
+                result.stderr if capture_output else "",
                 result.returncode,
             )
         except subprocess.TimeoutExpired:
@@ -365,7 +387,7 @@ class UpdateChecker:
                 "Updating isolated APT cache",
                 source_file=self.config.apt_source_file,
                 cache_dir=str(self.config.apt_cache_dir),
-                command=" ".join(cmd)
+                command=" ".join(cmd),
             )
         else:
             logger.info("Updating all APT sources in system cache", command=" ".join(cmd))
@@ -378,7 +400,7 @@ class UpdateChecker:
                 stderr=stderr,
                 stdout=stdout,
                 command=" ".join(cmd),
-                return_code=code
+                return_code=code,
             )
             return False
 
