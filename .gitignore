@@ -55,6 +55,7 @@ debian/*.substvars
 debian/files
 debian/debhelper-build-stamp
 debian/*.postrm.debhelper
+debian/distiller-update.1
 *.deb
 *.buildinfo
 *.changes
