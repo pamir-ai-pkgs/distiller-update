@@ -112,11 +112,20 @@ class LEDController:
             self.turn_off()
 
     def turn_off(self) -> None:
-        """Turn off all LEDs."""
+        """Turn off all LEDs.
+
+        Stops all animations by setting to static mode before turning off.
+        This ensures kernel-based animations (fade, blink) are properly terminated.
+        """
         if not self.enabled or not self.led:
             return
 
         try:
+            # Stop all animations first by setting to static mode
+            for led_id in self.available_leds:
+                self.led.set_animation_mode(led_id, "static", 0)
+
+            # Then turn off all LEDs
             self.led.turn_off_all()
         except Exception as e:
             logger.error("Failed to turn off LEDs", error=str(e), exc_info=True)

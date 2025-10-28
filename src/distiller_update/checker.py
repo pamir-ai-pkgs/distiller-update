@@ -184,80 +184,80 @@ class UpdateChecker:
         lock_path = "/run/distiller-update.lock"
         os.makedirs("/run", exist_ok=True)
 
-        led_controller = LEDController()
-        led_status = "disabled" if not led_controller.enabled else "idle"
+        with LEDController() as led_controller:
+            led_status = "disabled" if not led_controller.enabled else "idle"
 
-        try:
-            with open(lock_path, "w") as lockf:
-                try:
-                    fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
+            try:
+                with open(lock_path, "w") as lockf:
+                    try:
+                        fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        return {
+                            "ok": False,
+                            "rc": 1,
+                            "error": "Another update is running",
+                            "led_status": led_status,
+                        }
+
+                    started_at = datetime.now()
+
+                    led_controller.set_updating()
+                    led_status = "updating"
+
+                    # Always use full system cache update for installations to ensure all dependencies available
+                    self._update_cache(force_full_update=True)
+
+                    to_upgrade = [a for a in actions if a.current_version]
+                    to_install = [a for a in actions if a.current_version is None]
+
+                    up_args = [f"{p.name}={p.new_version}" for p in to_upgrade]
+                    in_args = [f"{p.name}={p.new_version}" for p in to_install]
+
+                    rc = 0
+                    if up_args:
+                        _, _, code = self._run_command(
+                            ["apt-get", "install", "-y", "--only-upgrade", *up_args],
+                            timeout=self.config.apt_install_timeout,
+                        )
+                        rc = max(rc, code)
+
+                    if in_args:
+                        _, _, code = self._run_command(
+                            ["apt-get", "install", "-y", *in_args],
+                            timeout=self.config.apt_install_timeout,
+                        )
+                        rc = max(rc, code)
+
+                    ok = True
+                    results = []
+                    for p in actions:
+                        cur = self.installed_version(p.name)
+                        results.append({"name": p.name, "installed": cur, "expected": p.new_version})
+                        if cur != p.new_version:
+                            ok = False
+                            rc = rc or 2
+
+                    if ok:
+                        led_controller.set_success()
+                        led_status = "success"
+                    else:
+                        led_controller.set_error()
+                        led_status = "error"
+
+                    finished_at = datetime.now()
                     return {
-                        "ok": False,
-                        "rc": 1,
-                        "error": "Another update is running",
+                        "ok": ok,
+                        "rc": rc,
+                        "started_at": started_at.isoformat() + "Z",
+                        "finished_at": finished_at.isoformat() + "Z",
+                        "results": results,
                         "led_status": led_status,
                     }
-
-                started_at = datetime.now()
-
-                led_controller.set_updating()
-                led_status = "updating"
-
-                # Always use full system cache update for installations to ensure all dependencies available
-                self._update_cache(force_full_update=True)
-
-                to_upgrade = [a for a in actions if a.current_version]
-                to_install = [a for a in actions if a.current_version is None]
-
-                up_args = [f"{p.name}={p.new_version}" for p in to_upgrade]
-                in_args = [f"{p.name}={p.new_version}" for p in to_install]
-
-                rc = 0
-                if up_args:
-                    _, _, code = self._run_command(
-                        ["apt-get", "install", "-y", "--only-upgrade", *up_args],
-                        timeout=self.config.apt_install_timeout,
-                    )
-                    rc = max(rc, code)
-
-                if in_args:
-                    _, _, code = self._run_command(
-                        ["apt-get", "install", "-y", *in_args],
-                        timeout=self.config.apt_install_timeout,
-                    )
-                    rc = max(rc, code)
-
-                ok = True
-                results = []
-                for p in actions:
-                    cur = self.installed_version(p.name)
-                    results.append({"name": p.name, "installed": cur, "expected": p.new_version})
-                    if cur != p.new_version:
-                        ok = False
-                        rc = rc or 2
-
-                if ok:
-                    led_controller.set_success()
-                    led_status = "success"
-                else:
-                    led_controller.set_error()
-                    led_status = "error"
-
-                finished_at = datetime.now()
-                return {
-                    "ok": ok,
-                    "rc": rc,
-                    "started_at": started_at.isoformat() + "Z",
-                    "finished_at": finished_at.isoformat() + "Z",
-                    "results": results,
-                    "led_status": led_status,
-                }
-        except Exception as e:
-            logger.error("Apply failed", error=str(e))
-            led_controller.set_error()
-            led_status = "error"
-            return {"ok": False, "rc": 3, "error": str(e), "led_status": led_status}
+            except Exception as e:
+                logger.error("Apply failed", error=str(e))
+                led_controller.set_error()
+                led_status = "error"
+                return {"ok": False, "rc": 3, "error": str(e), "led_status": led_status}
 
     def installed_version(self, name: str) -> str | None:
         """Get the currently installed version of a package."""
