@@ -1,6 +1,6 @@
 [Unit]
 Description=Distiller Update Notifier Timer
-Documentation=https://github.com/pamir-ai/distiller-update
+Documentation=https://github.com/pamir-ai-pkgs/distiller-update
 
 [Timer]
 OnBootSec=5min
