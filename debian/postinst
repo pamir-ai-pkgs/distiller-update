@@ -5,20 +5,14 @@ case "$1" in
 configure)
 	cd /usr/lib/distiller-update
 
-	if [ ! -d .venv ]; then
-		uv venv || {
-			echo "ERROR: Failed to create virtual environment" >&2
-			exit 1
-		}
-	fi
+	[ -d .venv ] && rm -rf .venv
 
-	# Enable bytecode compilation for faster startup
 	export UV_COMPILE_BYTECODE=1
+	export UV_NO_CACHE=1
 	export UV_LINK_MODE=copy
 
-	# Install the package
-	uv pip install --python .venv/bin/python --compile-bytecode . || {
-		echo "ERROR: Failed to install package" >&2
+	uv sync --frozen --no-editable --compile-bytecode || {
+		echo "ERROR: Failed to install package dependencies" >&2
 		exit 1
 	}
 
