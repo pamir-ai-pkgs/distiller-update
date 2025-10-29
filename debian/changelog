@@ -1,3 +1,14 @@
+distiller-update (3.2.0) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * fix(led): ensure LED cleanup with context manager
+  * refactor: remove Rich-based progress UI in favor of native APT output
+  * docs(config): correct apt_source_file example to use absolute path
+  * chore(debian): update repository URL to pamir-ai-pkgs organization
+  * refactor(postinst): improve package installation reliability with uv sync
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Thu, 30 Oct 2025 01:29:38 +0530
+
 distiller-update (3.1.0) unstable; urgency=medium
 
   [ utsavbalar1231 ]
