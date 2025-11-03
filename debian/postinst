@@ -16,9 +16,8 @@ configure)
 		exit 1
 	}
 
-	# Ensure cache directory exists with proper permissions
-	mkdir -p /var/cache/distiller-update
-	chmod 755 /var/cache/distiller-update
+	install -d -m 0755 /var/cache/distiller-update
+	install -d -m 0755 /var/log/distiller-update
 
 	echo "INFO: distiller-update installed successfully."
 	echo "INFO: Start service: sudo systemctl start distiller-update.timer"
