@@ -1,6 +1,7 @@
 #!/usr/bin/make -f
 
-export PYBUILD_NAME=distiller-update
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export PYTHONDONTWRITEBYTECODE = 1
 
 %:
 	dh $@
