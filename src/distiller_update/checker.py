@@ -219,9 +219,12 @@ class UpdateChecker:
                     rc = 0
 
                     # Run apt-get with native progress output (no streaming/callbacks)
+                    # Use --force-confnew to automatically accept new config files
+                    dpkg_opts = ["-o", "Dpkg::Options::=--force-confnew"]
+
                     if up_args:
                         _, _, code = self._run_command(
-                            ["apt-get", "install", "-y", "--only-upgrade", *up_args],
+                            ["apt-get", "install", "-y", "--only-upgrade", *dpkg_opts, *up_args],
                             timeout=self.config.apt_install_timeout,
                             capture_output=False,
                         )
@@ -229,7 +232,7 @@ class UpdateChecker:
 
                     if in_args:
                         _, _, code = self._run_command(
-                            ["apt-get", "install", "-y", *in_args],
+                            ["apt-get", "install", "-y", *dpkg_opts, *in_args],
                             timeout=self.config.apt_install_timeout,
                             capture_output=False,
                         )
