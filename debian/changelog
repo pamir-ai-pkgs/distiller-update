@@ -1,3 +1,13 @@
+distiller-update (3.2.2) unstable; urgency=medium
+
+  [ utsavbalar1231 ]
+  * build: modernize build system with gbp workflow and hardening
+  * feat(debian): add pre-removal cleanup script
+  * fix: enable non-interactive package installation
+  * feat(cli): add filter flags to apply command
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Sun, 09 Nov 2025 01:56:08 +0530
+
 distiller-update (3.2.1) unstable; urgency=medium
 
   [ utsavbalar1231 ]
