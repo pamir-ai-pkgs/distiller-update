@@ -175,15 +175,41 @@ def list(
             )
 
 
+def _validate_filter_flags(
+    all_packages: bool, upgrade_only: bool, reinstall_only: bool
+) -> None:
+    """Validate that only one filter flag is specified."""
+    flags_set = sum([all_packages, upgrade_only, reinstall_only])
+    if flags_set > 1:
+        typer.echo(
+            "Error: --all, --upgrade, and --reinstall are mutually exclusive. "
+            "Use only one filter flag at a time.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
 @app.command()
 def apply(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
     refresh: Annotated[bool, typer.Option("--refresh")] = False,
+    all_packages: Annotated[
+        bool, typer.Option("--all", "-a", help="Apply all packages (default)")
+    ] = False,
+    upgrade_only: Annotated[
+        bool, typer.Option("--upgrade", "-u", help="Only apply upgrades")
+    ] = False,
+    reinstall_only: Annotated[
+        bool, typer.Option("--reinstall", "-r", help="Only apply reinstalls")
+    ] = False,
 ) -> None:
     """Apply updates."""
     ensure_root()
     setup_logging("warning")
+
+    # Validate mutual exclusivity of filter flags
+    _validate_filter_flags(all_packages, upgrade_only, reinstall_only)
 
     cfg = get_config(config)
     checker = UpdateChecker(cfg)
@@ -194,6 +220,38 @@ def apply(
     else:
         actions = checker.check_updates(refresh=refresh)
 
+    # Apply filtering based on action type
+    original_count = len(actions)
+    if upgrade_only:
+        actions = [pkg for pkg in actions if pkg.action_type == "Upgrade"]
+        filter_name = "upgrades"
+    elif reinstall_only:
+        actions = [pkg for pkg in actions if pkg.action_type == "Reinstall"]
+        filter_name = "reinstalls"
+    else:
+        # Default: apply all packages (no filter)
+        filter_name = None
+
+    # Check if filtering resulted in empty list
+    if not actions and original_count > 0 and filter_name:
+        if json_output:
+            typer.echo(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "message": f"No {filter_name} available (found {original_count} other packages)",
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            show_step(f"No {filter_name} to apply", success=True)
+            console.print(
+                f"[yellow]({original_count} other package{'s' if original_count != 1 else ''} "
+                f"available with different filters)[/yellow]"
+            )
+        return
+
     if not actions:
         if json_output:
             typer.echo(json.dumps({"ok": True, "message": "Nothing to do"}, indent=2))
@@ -202,9 +260,13 @@ def apply(
         return
 
     if not json_output:
-        console.print(
-            f"\n[bold cyan]Installing {len(actions)} package{'s' if len(actions) != 1 else ''}...[/bold cyan]"
-        )
+        # Show which filter is active in the preview
+        if filter_name:
+            item_type = filter_name
+        else:
+            item_type = f"package{'s' if len(actions) != 1 else ''}"
+
+        console.print(f"\n[bold cyan]Installing {len(actions)} {item_type}...[/bold cyan]")
         for pkg in actions:
             console.print(f"  → {pkg.name}: {pkg.current_version or '(new)'} → {pkg.new_version}")
         console.print()
