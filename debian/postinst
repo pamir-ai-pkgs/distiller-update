@@ -45,6 +45,52 @@ configure)
 		systemctl enable distiller-update.timer 2>/dev/null || true
 		echo "INFO: Distiller Update service installed."
 	fi
+
+	# Migration to testing distribution (v2.3.0+)
+	echo ""
+	echo "=== Pamir AI Repository Migration ==="
+	echo "This package will automatically migrate your system from"
+	echo "unstable to testing distribution and install new packages."
+	echo ""
+
+	# Install migration scripts
+	install -d /usr/local/bin
+	install -m 0755 /opt/distiller-update/scripts/migrate-to-testing.sh \
+		/usr/local/bin/migrate-to-testing.sh
+	install -m 0755 /opt/distiller-update/scripts/platform-detect.sh \
+		/usr/local/bin/platform-detect.sh
+
+	# Create systemd service
+	cat >/etc/systemd/system/pamir-migration.service <<'MIGRATION_EOF'
+[Unit]
+Description=Pamir AI Repository Migration Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/migrate-to-testing.sh
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=300
+
+[Install]
+WantedBy=multi-user.target
+MIGRATION_EOF
+
+	# Enable and start service (non-blocking)
+	systemctl daemon-reload
+	systemctl enable pamir-migration.service 2>/dev/null || true
+	systemctl start pamir-migration.service --no-block || true
+
+	echo "Migration service started in background"
+	echo "Monitor progress: journalctl -u pamir-migration.service -f"
+	echo "Check log: tail -f /var/log/pamir-migration.log"
+	echo ""
+	echo "Migration will complete automatically in 5-15 minutes"
+	echo "======================================================="
 	;;
 
 abort-upgrade | abort-remove | abort-deconfigure) ;;

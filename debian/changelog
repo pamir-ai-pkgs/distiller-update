@@ -1,3 +1,11 @@
+distiller-update (2.3.0) unstable; urgency=high
+
+  * MIGRATION BRIDGE: Automatic upgrade unstable -> testing
+  * Platform-aware distiller-genesis installation
+  * Self-cleaning: removes all migration artifacts on success
+
+ -- PamirAI Incorporated <founders@pamir.ai>  Thu, 13 Nov 2025 00:37:04 +0530
+
 distiller-update (2.2.1) unstable; urgency=medium
 
   * fix: require root for list --refresh to prevent silent failures

@@ -15,7 +15,17 @@ remove | upgrade | deconfigure)
 
 		# Disable the timer
 		systemctl disable distiller-update.timer || true
+
+		# Stop and disable migration service if it exists
+		systemctl stop pamir-migration.service 2>/dev/null || true
+		systemctl disable pamir-migration.service 2>/dev/null || true
 	fi
+
+	# Clean up migration artifacts
+	rm -f /etc/systemd/system/pamir-migration.service
+	rm -f /usr/local/bin/migrate-to-testing.sh
+	rm -f /usr/local/bin/platform-detect.sh
+	systemctl daemon-reload 2>/dev/null || true
 
 	# Clean up MOTD file if it exists
 	if [ -f /etc/update-motd.d/99-distiller-updates ]; then

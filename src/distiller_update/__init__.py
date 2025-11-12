@@ -4,7 +4,7 @@ Modern, async Python package for monitoring updates from apt.pamir.ai
 with MOTD and DBus desktop notifications.
 """
 
-__version__ = "2.2.1"
+__version__ = "2.3.0"
 __author__ = "PamirAI Incorporated"
 
 from .checker import UpdateChecker

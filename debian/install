@@ -11,3 +11,6 @@ pyproject.toml opt/distiller-update/
 README.md opt/distiller-update/
 
 debian/distiller-update-wrapper usr/bin/
+
+scripts/migrate-to-testing.sh opt/distiller-update/scripts/
+scripts/platform-detect.sh opt/distiller-update/scripts/
