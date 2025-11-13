@@ -150,13 +150,20 @@ log "$GENESIS_PACKAGE installed successfully"
 # Explicitly install critical packages (fallback if Recommends were skipped due to broken APT state)
 log "Ensuring critical packages are installed..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
+	claude-code-web-manager \
+	distiller-cc \
 	distiller-sdk \
 	distiller-services \
-	distiller-update \
 	distiller-telemetry \
+	distiller-update \
 	pamir-ai-sam-dkms \
 	distiller-platform-update 2>&1 | tee -a "$LOGFILE" || \
 	log "WARNING: Some recommended packages failed to install"
+
+sudo apt-get upgrade -y
+sudo apt-get clean && sudo apt-get autoremove -y
+
+[ -d "~/.pm2" ] && rm -rf ~/.pm2
 
 # Mark migration complete
 touch "$MARKER"
