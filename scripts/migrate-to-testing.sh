@@ -7,6 +7,9 @@ SERVICE_FILE="/etc/systemd/system/pamir-migration.service"
 SCRIPT_PATH="/usr/local/bin/migrate-to-testing.sh"
 PLATFORM_DETECT="/usr/local/bin/platform-detect.sh"
 
+# Cleanup log file before starting
+[ -f "$LOGFILE" ] && rm -f "$LOGFILE"
+
 log() {
 	echo "[$(date -Iseconds)] $*" | tee -a "$LOGFILE"
 }
@@ -17,7 +20,7 @@ cleanup_migration_artifacts() {
 	# Remove service file first
 	rm -f "$SERVICE_FILE"
 
-	# Disable service (don't stop - we're running as this service!)
+	# Disable service
 	systemctl disable pamir-migration.service 2>/dev/null || true
 
 	# Remove scripts
@@ -37,7 +40,7 @@ if [ -f "$MARKER" ]; then
 	exit 0
 fi
 
-log "=== Pamir AI Migration: unstable -> testing ==="
+log "Pamir AI Migration: unstable -> testing"
 
 # Pre-flight: Network connectivity
 log "Checking network connectivity..."
@@ -72,7 +75,7 @@ log "APT lock released"
 
 # Backup current sources
 if [ -f /etc/apt/sources.list.d/pamir-ai.list ]; then
-	BACKUP_FILE="/var/lib/pamir-ai.list.backup-$(date +%Y%m%d-%H%M%S)"
+	BACKUP_FILE="/tmp/pamir-ai.list.backup-$(date +%Y%m%d-%H%M%S)"
 	cp /etc/apt/sources.list.d/pamir-ai.list "$BACKUP_FILE"
 	log "Backed up sources to $BACKUP_FILE"
 fi
@@ -82,6 +85,10 @@ log "Updating sources.list to testing distribution..."
 cat >/etc/apt/sources.list.d/pamir-ai.list <<'EOF'
 deb [arch=arm64 signed-by=/usr/share/keyrings/pamir-ai-archive-keyring.gpg] https://apt.pamir.ai/ testing main
 EOF
+
+log "Installing debian.griffo.io sources for uv package"
+curl -sS https://debian.griffo.io/EA0F721D231FDD3A0A17B9AC7808B4DD62C41256.asc | sudo gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/debian.griffo.io.gpg
+echo "deb https://debian.griffo.io/apt $(lsb_release -sc 2>/dev/null) main" | sudo tee /etc/apt/sources.list.d/debian.griffo.io.list
 
 # Update package lists
 log "Running apt update..."
@@ -128,18 +135,16 @@ log "Fixing any broken packages..."
 DEBIAN_FRONTEND=noninteractive apt-get install -f -y || log "WARNING: Could not fix broken packages"
 
 log "Purging old packages..."
-DEBIAN_FRONTEND=noninteractive apt-get purge -y distiller-cm5-* || true
+# DEBIAN_FRONTEND=noninteractive apt-get purge -y distiller-cm5-* || true
 DEBIAN_FRONTEND=noninteractive apt-get purge -y distiller-test-harness || true
 log "Old packages purged"
 
+# Install genesis meta-package
 log "Installing $GENESIS_PACKAGE..."
-
-# Install genesis meta-package (pulls in all new packages)
 DEBIAN_FRONTEND=noninteractive apt-get install -y "$GENESIS_PACKAGE" --install-recommends || {
 	log "ERROR: Failed to install $GENESIS_PACKAGE"
 	exit 1
 }
-
 log "$GENESIS_PACKAGE installed successfully"
 
 # Explicitly install critical packages (fallback if Recommends were skipped due to broken APT state)
@@ -155,7 +160,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 # Mark migration complete
 touch "$MARKER"
-log "=== Migration complete ==="
+log "Migration complete."
 
 # Self-cleanup: Remove all migration artifacts
 cleanup_migration_artifacts
