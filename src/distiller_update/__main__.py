@@ -49,11 +49,12 @@ def check(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     quiet: Annotated[bool, typer.Option("--quiet", "-q")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Check for updates."""
     ensure_root()
 
-    if quiet:
+    if quiet or json_output:
         setup_logging("error")
     elif verbose:
         setup_logging("debug")
@@ -63,7 +64,7 @@ def check(
     cfg = get_config(config)
     daemon = UpdateDaemon(cfg)
 
-    if not quiet:
+    if not quiet and not json_output:
         start_time = time.time()
         with get_spinner("Checking for updates..."):
             daemon.run_once()
@@ -72,8 +73,42 @@ def check(
     else:
         daemon.run_once()
 
-    if not quiet:
-        result = daemon.checker.get_status()
+    result = daemon.checker.get_status()
+
+    if json_output:
+        # JSON output mode
+        if result:
+            typer.echo(
+                json.dumps(
+                    {
+                        "has_updates": result.has_updates,
+                        "packages": [p.model_dump() for p in result.packages],
+                        "summary": result.summary,
+                        "checked_at": result.checked_at.isoformat() + "Z",
+                        "distribution": result.distribution,
+                        "total_size": result.total_size,
+                    },
+                    indent=2,
+                    default=str,
+                )
+            )
+        else:
+            # No result available (shouldn't happen, but handle gracefully)
+            typer.echo(
+                json.dumps(
+                    {
+                        "has_updates": False,
+                        "packages": [],
+                        "summary": "Unable to retrieve update information",
+                        "checked_at": datetime.now().isoformat() + "Z",
+                        "distribution": cfg.distribution,
+                        "total_size": 0,
+                    },
+                    indent=2,
+                    default=str,
+                )
+            )
+    elif not quiet:
         if result and result.has_updates:
             print_summary(result.summary)
 
@@ -175,9 +210,7 @@ def list(
             )
 
 
-def _validate_filter_flags(
-    all_packages: bool, upgrade_only: bool, reinstall_only: bool
-) -> None:
+def _validate_filter_flags(all_packages: bool, upgrade_only: bool, reinstall_only: bool) -> None:
     """Validate that only one filter flag is specified."""
     flags_set = sum([all_packages, upgrade_only, reinstall_only])
     if flags_set > 1:
